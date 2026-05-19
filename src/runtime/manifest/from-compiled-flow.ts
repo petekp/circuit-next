@@ -97,7 +97,7 @@ function convertStep(step: CompiledStep): ExecutableStep {
     return {
       ...base,
       kind: 'checkpoint',
-      choices: step.policy.choices.map((choice) => choice.id),
+      choices: step.policy.choices?.map((choice) => choice.id) ?? [],
       policy: step.policy,
     };
   }

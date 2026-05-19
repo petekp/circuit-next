@@ -126,7 +126,7 @@ describe('Build runtime wiring', () => {
     expect(frame?.kind).toBe('checkpoint');
     if (frame?.kind !== 'checkpoint') throw new Error('frame-step is not a checkpoint');
 
-    expect(frame.policy.choices.map((choice) => choice.id)).toEqual(['continue']);
+    expect(frame.policy.choices?.map((choice) => choice.id)).toEqual(['continue']);
     expect(frame.check.allow).toEqual(['continue']);
   });
 

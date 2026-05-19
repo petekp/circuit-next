@@ -3,10 +3,12 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { executeCompose } from '../../src/runtime/executors/compose.js';
 import { resumeCompiledFlow } from '../../src/runtime/run/checkpoint-resume.js';
 import { runCompiledFlowWithWaiting } from '../../src/runtime/run/compiled-flow-runner.js';
 import { isGraphCheckpointWaitingResult } from '../../src/runtime/run/graph-runner.js';
 import { TraceStore } from '../../src/runtime/trace/trace-store.js';
+import type { Axes } from '../../src/schemas/axes.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.js';
@@ -38,6 +40,10 @@ const PASSING_RUBRIC_MODEL_JUDGMENTS = {
   insight_density: 'pass',
   branch_distinctness: 'pass',
 } as const;
+
+function tournamentAxes(n: 2 | 3 | 4): Axes {
+  return { rigor: 'standard', tournament: true, tournament_n: n, autonomous: false };
+}
 
 function tournamentRelayer(): RelayFn {
   return {
@@ -188,21 +194,16 @@ describe('explore tournament runtime', () => {
     }
     expect(waiting.checkpoint).toMatchObject({
       stepId: 'tradeoff-checkpoint-step',
-      allowedChoices: ['option-1', 'option-2', 'option-3', 'option-4'],
+      allowedChoices: ['option-1', 'option-2', 'option-3'],
     });
     expect(existsSync(join(runFolder, 'reports/checkpoints/tradeoff-response.json'))).toBe(false);
 
     const options = readJson(runFolder, 'reports/decision-options.json') as {
       options: ReadonlyArray<{ id: string; label: string }>;
     };
-    expect(options.options.map((option) => option.label)).toEqual([
-      'React',
-      'Vue',
-      'Hybrid path',
-      'Defer pending evidence',
-    ]);
+    expect(options.options.map((option) => option.label)).toEqual(['React', 'Vue', 'Hybrid path']);
 
-    for (const branch of ['option-1', 'option-2', 'option-3', 'option-4']) {
+    for (const branch of ['option-1', 'option-2', 'option-3']) {
       const branchDir = join(runFolder, 'reports', 'tournament-branches', branch);
       expect(existsSync(join(branchDir, 'request.txt'))).toBe(true);
       expect(existsSync(join(branchDir, 'receipt.txt'))).toBe(true);
@@ -225,7 +226,6 @@ describe('explore tournament runtime', () => {
       'option-1',
       'option-2',
       'option-3',
-      'option-4',
     ]);
     for (const branch of aggregate.branches) {
       expect(branch.result_body?.option_id).toBe(branch.branch_id);
@@ -270,6 +270,118 @@ describe('explore tournament runtime', () => {
       schema: 'explore.tournament-aggregate@v1',
     });
   });
+
+  it.each([2, 3, 4] as const)(
+    'wires tournament_n=%s through options, fanout, aggregate, and checkpoint choices',
+    async (tournamentN) => {
+      const { bytes } = loadTournamentFixture();
+      const runFolder = join(runFolderBase, `tournament-n-${tournamentN}`);
+
+      const waiting = await runCompiledFlowWithWaiting({
+        runDir: runFolder,
+        flowBytes: bytes,
+        runId: `33333333-3333-3333-3333-33333333334${tournamentN}`,
+        goal: 'decide: React vs Vue vs Svelte vs Angular',
+        depth: 'tournament',
+        entryModeName: 'tournament',
+        axes: tournamentAxes(tournamentN),
+        now: deterministicNow(Date.UTC(2026, 3, 29, 17, tournamentN, 0)),
+        relayer: tournamentRelayer(),
+      });
+
+      expect(waiting.outcome).toBe('checkpoint_waiting');
+      if (!isGraphCheckpointWaitingResult(waiting)) {
+        throw new Error('expected checkpoint_waiting');
+      }
+      const expectedIds = Array.from({ length: tournamentN }, (_, index) => `option-${index + 1}`);
+      expect(waiting.checkpoint.allowedChoices).toEqual(expectedIds);
+
+      const options = readJson(runFolder, 'reports/decision-options.json') as {
+        options: ReadonlyArray<{ id: string }>;
+      };
+      expect(options.options.map((option) => option.id)).toEqual(expectedIds);
+
+      const aggregate = readJson(runFolder, 'reports/tournament-aggregate.json') as {
+        branch_count: number;
+        branches: ReadonlyArray<{ branch_id: string }>;
+      };
+      expect(aggregate.branch_count).toBe(tournamentN);
+      expect(aggregate.branches.map((branch) => branch.branch_id).sort()).toEqual(expectedIds);
+
+      const request = readJson(runFolder, 'reports/checkpoints/tradeoff-request.json') as {
+        allowed_choices: readonly string[];
+        execution_context: { axes: { tournament_n: number } };
+      };
+      expect(request.allowed_choices).toEqual(expectedIds);
+      expect(request.execution_context.axes.tournament_n).toBe(tournamentN);
+
+      const traceEntries = await new TraceStore(runFolder).load();
+      expect(traceEntries.find((entry) => entry.kind === 'fanout.started')?.branch_ids).toEqual(
+        expectedIds,
+      );
+      expect(traceEntries.find((entry) => entry.kind === 'checkpoint.requested')?.options).toEqual(
+        expectedIds,
+      );
+    },
+  );
+
+  it.each([
+    { generated: 2, expected: 3 },
+    { generated: 4, expected: 3 },
+  ])(
+    'rejects $generated generated tournament options when tournament_n=$expected before child relays start',
+    async ({ generated, expected }) => {
+      const { bytes } = loadTournamentFixture();
+      const runFolder = join(runFolderBase, `tournament-mismatch-${generated}`);
+      const relayInputs: RelayInput[] = [];
+
+      const outcome = await runCompiledFlowWithWaiting({
+        runDir: runFolder,
+        flowBytes: bytes,
+        runId: `33333333-3333-3333-3333-33333333335${generated}`,
+        goal: 'decide: React vs Vue vs Svelte vs Angular',
+        depth: 'tournament',
+        entryModeName: 'tournament',
+        axes: tournamentAxes(3),
+        now: deterministicNow(Date.UTC(2026, 3, 29, 18, generated, 0)),
+        relayer: {
+          connectorName: 'claude-code',
+          relay: async (input) => {
+            relayInputs.push(input);
+            return tournamentRelayer().relay(input);
+          },
+        },
+        executors: {
+          compose: async (step, context) => {
+            if (step.id !== 'decision-options-step') {
+              if (step.kind !== 'compose') throw new Error('expected compose step');
+              return await executeCompose(step, context);
+            }
+            await context.files.writeJson('reports/decision-options.json', {
+              decision_question: 'Which path should Circuit recommend?',
+              recommendation_basis: 'Mismatch test.',
+              options: Array.from({ length: generated }, (_, index) => ({
+                id: `option-${index + 1}`,
+                label: `Option ${index + 1}`,
+                summary: `Generated option ${index + 1}.`,
+                best_case_prompt: `Make the strongest case for option ${index + 1}.`,
+                evidence_refs: ['reports/analysis.json'],
+                tradeoffs: ['Fast to compare.'],
+              })),
+            });
+            return { route: 'pass', details: { writer: 'mismatch-test' } };
+          },
+        },
+      });
+
+      expect(outcome.outcome).toBe('aborted');
+      if (isGraphCheckpointWaitingResult(outcome) || outcome.outcome !== 'aborted') {
+        throw new Error('expected aborted');
+      }
+      expect(outcome.reason).toContain(`expected ${expected} items`);
+      expect(relayInputs).toHaveLength(0);
+    },
+  );
 
   it('rejects a proposal branch whose report option_id does not match the branch id', async () => {
     const { bytes } = loadTournamentFixture();

@@ -648,7 +648,7 @@ describe('CLI router', () => {
     expect(output.outcome).toBe('checkpoint_waiting');
     expect(output.checkpoint).toMatchObject({
       step_id: 'tradeoff-checkpoint-step',
-      allowed_choices: ['option-1', 'option-2', 'option-3', 'option-4'],
+      allowed_choices: ['option-1', 'option-2', 'option-3'],
     });
     expect(bootstrap).toMatchObject({ depth: 'tournament' });
     expect(stressReview).toBeDefined();
@@ -664,7 +664,7 @@ describe('CLI router', () => {
     expect(output.outcome).toBe('checkpoint_waiting');
     expect(progress.find((event) => event.type === 'fanout.started')?.presentation).toMatchObject({
       line_mode: 'replace_slot',
-      status_text: 'Comparing 4 options...',
+      status_text: 'Comparing 3 options...',
     });
     expect(
       progress
@@ -690,13 +690,11 @@ describe('CLI router', () => {
       'React',
       'Vue',
       'Hybrid path',
-      'Defer pending evidence',
     ]);
     expect(question?.options.map((option) => option.checkpoint_choice)).toEqual([
       'option-1',
       'option-2',
       'option-3',
-      'option-4',
     ]);
     expect(typeof output.operator_summary_markdown_path).toBe('string');
     const markdown = readFileSync(output.operator_summary_markdown_path as string, 'utf8');
@@ -1274,6 +1272,9 @@ describe('CLI router', () => {
     expect(output.entry_mode).toBe('tournament');
     expect(output.entry_mode_source).toBe('explicit');
     expect(output.outcome).toBe('checkpoint_waiting');
+    expect(output.checkpoint).toMatchObject({
+      allowed_choices: ['option-1', 'option-2', 'option-3', 'option-4'],
+    });
   });
 
   it('loads the tournament graph when autonomous is combined with tournament', async () => {
@@ -1320,7 +1321,12 @@ describe('CLI router', () => {
       tournamentRelayer(),
     );
 
-    expect(output.outcome).toBe('checkpoint_waiting');
+    expect(output).toMatchObject({
+      outcome: 'checkpoint_waiting',
+      checkpoint: {
+        allowed_choices: ['option-1', 'option-2'],
+      },
+    });
   });
 
   it('accepts the default tournament N when omitted', async () => {
@@ -1336,7 +1342,12 @@ describe('CLI router', () => {
       tournamentRelayer(),
     );
 
-    expect(output.outcome).toBe('checkpoint_waiting');
+    expect(output).toMatchObject({
+      outcome: 'checkpoint_waiting',
+      checkpoint: {
+        allowed_choices: ['option-1', 'option-2', 'option-3'],
+      },
+    });
   });
 
   it.each(['1', '5'])('rejects tournament N=%s outside the v1 range', async (n) => {

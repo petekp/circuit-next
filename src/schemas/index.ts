@@ -15,6 +15,7 @@ export * from './result.js';
 export * from './progress-event.js';
 export * from './rubric.js';
 export * from './rigor.js';
+export * from './runtime-source.js';
 export * from './axes.js';
 export * from './depth.js';
 export * from './role.js';

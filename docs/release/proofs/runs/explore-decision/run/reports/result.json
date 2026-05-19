@@ -5,8 +5,8 @@
   "goal": "decide: React vs Vue",
   "outcome": "complete",
   "summary": "Run closed with outcome complete via @complete.",
-  "closed_at": "2026-04-29T17:01:10.000Z",
-  "trace_entries_observed": 68,
-  "manifest_hash": "990f561321275690ad5e7ece7cc8311f01b2b2555f846de6be72b9b1e8ee2e34",
+  "closed_at": "2026-04-29T17:01:02.000Z",
+  "trace_entries_observed": 60,
+  "manifest_hash": "46e8b87a24aa6b400a0a61a1603108e3407673777aff0e22af0baa8e84f837fe",
   "verdict": "recommend"
 }

@@ -97,7 +97,7 @@ async function executeFanoutInternal(
   const attempt = context.activeStepAttempt ?? 1;
   const branchDirRoot = branchesDir(step);
   const aggregate = aggregateRef(step);
-  const branches = await expandFanoutBranches(step, context.files);
+  const branches = await expandFanoutBranches(step, context.files, context);
   if (branches.length === 0) {
     throw new Error(`fanout step '${step.id}': branch resolution produced zero branches`);
   }

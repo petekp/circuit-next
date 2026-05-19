@@ -81,11 +81,19 @@ export const SchemaSectionsCheck = z
   .strict();
 export type SchemaSectionsCheck = z.infer<typeof SchemaSectionsCheck>;
 
+export const CheckpointAllowFrom = z
+  .object({
+    kind: z.literal('policy_choices'),
+  })
+  .strict();
+export type CheckpointAllowFrom = z.infer<typeof CheckpointAllowFrom>;
+
 export const CheckpointSelectionCheck = z
   .object({
     kind: z.literal('checkpoint_selection'),
     source: CheckpointResponseSource,
-    allow: z.array(z.string().min(1)).min(1),
+    allow: z.array(z.string().min(1)).min(1).optional(),
+    allow_from: CheckpointAllowFrom.optional(),
   })
   .strict();
 export type CheckpointSelectionCheck = z.infer<typeof CheckpointSelectionCheck>;

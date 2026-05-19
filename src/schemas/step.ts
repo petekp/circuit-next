@@ -9,6 +9,7 @@ import { Depth } from './depth.js';
 import { CompiledFlowId, ProtocolId, StepId } from './ids.js';
 import { JsonObject } from './json.js';
 import { RubricRuntimeSignal } from './rubric.js';
+import { CheckpointChoiceSource, RuntimeNumberSource } from './runtime-source.js';
 import { RunRelativePath } from './scalars.js';
 import { SelectionOverride } from './selection-policy.js';
 import { SkillSlotArray } from './skill.js';
@@ -86,7 +87,9 @@ export const CheckpointPolicy = z
           })
           .strict(),
       )
-      .min(1),
+      .min(1)
+      .optional(),
+    choices_from: CheckpointChoiceSource.optional(),
     safe_default_choice: z.string().min(1).optional(),
     safe_autonomous_choice: z.string().min(1).optional(),
     auto_resolution: AutoResolutionPolicy.optional(),
@@ -94,22 +97,33 @@ export const CheckpointPolicy = z
   })
   .strict()
   .superRefine((policy, ctx) => {
+    const hasStaticChoices = policy.choices !== undefined;
+    const hasDynamicChoices = policy.choices_from !== undefined;
+    if (hasStaticChoices === hasDynamicChoices) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['choices'],
+        message: 'checkpoint policy must declare exactly one of choices or choices_from',
+      });
+    }
     const choiceIds = new Set<string>();
-    for (const [index, choice] of policy.choices.entries()) {
-      if (choiceIds.has(choice.id)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['choices', index, 'id'],
-          message: `duplicate checkpoint choice '${choice.id}'`,
-        });
+    if (policy.choices !== undefined) {
+      for (const [index, choice] of policy.choices.entries()) {
+        if (choiceIds.has(choice.id)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['choices', index, 'id'],
+            message: `duplicate checkpoint choice '${choice.id}'`,
+          });
+        }
+        choiceIds.add(choice.id);
       }
-      choiceIds.add(choice.id);
     }
     for (const [field, value] of [
       ['safe_default_choice', policy.safe_default_choice],
       ['safe_autonomous_choice', policy.safe_autonomous_choice],
     ] as const) {
-      if (value !== undefined && !choiceIds.has(value)) {
+      if (value !== undefined && policy.choices !== undefined && !choiceIds.has(value)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: [field],
@@ -331,7 +345,10 @@ export const FanoutBranchesDynamic = z
     template: FanoutBranchTemplate,
     // Hard cap to prevent runaway fanouts when the source report is
     // unexpectedly large.
-    max_branches: z.number().int().positive().max(256).default(16),
+    max_branches: z.union([z.number().int().positive().max(256), RuntimeNumberSource]).default(16),
+    // Optional exact count. Tournament fanouts use this to fail before any
+    // child relay launches when option generation drifts from the resolved N.
+    required_count: RuntimeNumberSource.optional(),
   })
   .strict();
 export type FanoutBranchesDynamic = z.infer<typeof FanoutBranchesDynamic>;
@@ -477,13 +494,49 @@ export const Step = z
       });
     }
     if (step.kind === 'checkpoint') {
-      const policyChoiceIds = step.policy.choices.map((choice) => choice.id).sort();
-      const checkChoiceIds = [...step.check.allow].sort();
-      if (policyChoiceIds.join('\0') !== checkChoiceIds.join('\0')) {
+      const hasStaticAllow = step.check.allow !== undefined;
+      const hasDynamicAllow = step.check.allow_from !== undefined;
+      if (hasStaticAllow === hasDynamicAllow) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['check', 'allow'],
-          message: 'checkpoint check.allow must exactly match policy.choices ids',
+          message: 'checkpoint check must declare exactly one of allow or allow_from',
+        });
+      }
+      if (hasStaticAllow && step.policy.choices === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['check', 'allow'],
+          message: 'checkpoint check.allow requires static policy.choices',
+        });
+      }
+      if (hasDynamicAllow && step.check.allow_from?.kind !== 'policy_choices') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['check', 'allow_from'],
+          message: 'checkpoint check.allow_from must reference policy_choices',
+        });
+      }
+      if (step.check.allow !== undefined && step.policy.choices !== undefined) {
+        const policyChoiceIds = step.policy.choices.map((choice) => choice.id).sort();
+        const checkChoiceIds = [...step.check.allow].sort();
+        if (policyChoiceIds.join('\0') !== checkChoiceIds.join('\0')) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['check', 'allow'],
+            message: 'checkpoint check.allow must exactly match policy.choices ids',
+          });
+        }
+      }
+      if (
+        hasDynamicAllow &&
+        step.policy.choices === undefined &&
+        step.policy.choices_from === undefined
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['policy', 'choices_from'],
+          message: 'checkpoint check.allow_from requires policy.choices or policy.choices_from',
         });
       }
       if (step.writes.report !== undefined) {

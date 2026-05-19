@@ -804,6 +804,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
       projectRoot,
       childCompiledFlowResolver: defaultChildCompiledFlowResolver(args.flowRoot),
       depth: selectedDepth(flow, args, route, entryModeSelection),
+      axes: selectedAxes(args, route),
       ...(entryModeSelection.entryModeName === undefined
         ? {}
         : { entryModeName: entryModeSelection.entryModeName }),

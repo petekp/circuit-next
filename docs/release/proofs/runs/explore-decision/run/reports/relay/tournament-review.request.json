@@ -54,19 +54,6 @@ Context (from reads):
         "Can move the decision forward now",
         "May blur ownership of the final direction"
       ]
-    },
-    {
-      "id": "option-4",
-      "label": "Defer pending evidence",
-      "summary": "Pause the final choice for decide: React vs Vue until the missing evidence is gathered.",
-      "best_case_prompt": "Make the strongest case for deferring decide: React vs Vue until the missing evidence is gathered.",
-      "evidence_refs": [
-        "reports/brief.json"
-      ],
-      "tradeoffs": [
-        "Reduces decision risk",
-        "May miss strengths from another option"
-      ]
     }
   ],
   "recommendation_basis": "Compare the named options and bounded fallback choices against the available evidence."
@@ -77,16 +64,16 @@ Context (from reads):
 {
   "schema_version": 1,
   "join_policy": "aggregate-only",
-  "branch_count": 4,
+  "branch_count": 3,
   "branches": [
     {
       "branch_id": "option-1",
-      "child_run_id": "66c4ea37-8cbc-4649-b2c2-6d145756e490",
+      "child_run_id": "cdce70b0-08a9-462c-9207-654cc79d6320",
       "child_outcome": "complete",
       "verdict": "accept",
       "admitted": true,
       "result_path": "reports/tournament-branches/option-1/report.json",
-      "duration_ms": 3,
+      "duration_ms": 4,
       "result_body": {
         "verdict": "accept",
         "option_id": "option-1",
@@ -191,12 +178,12 @@ Context (from reads):
     },
     {
       "branch_id": "option-2",
-      "child_run_id": "ffb3aa8c-9f64-4d85-bd1d-debaf2b55ccf",
+      "child_run_id": "90135b79-d4ac-4451-ac35-88f6929897e6",
       "child_outcome": "complete",
       "verdict": "accept",
       "admitted": true,
       "result_path": "reports/tournament-branches/option-2/report.json",
-      "duration_ms": 3,
+      "duration_ms": 4,
       "result_body": {
         "verdict": "accept",
         "option_id": "option-2",
@@ -301,12 +288,12 @@ Context (from reads):
     },
     {
       "branch_id": "option-3",
-      "child_run_id": "266ee8ae-04c2-4fea-8d38-a9792d2cf584",
+      "child_run_id": "35bc26b7-a763-4ea4-92fa-c338f16c4a65",
       "child_outcome": "complete",
       "verdict": "accept",
       "admitted": true,
       "result_path": "reports/tournament-branches/option-3/report.json",
-      "duration_ms": 3,
+      "duration_ms": 2,
       "result_body": {
         "verdict": "accept",
         "option_id": "option-3",
@@ -408,119 +395,9 @@ Context (from reads):
           "final_reason": "not-ranked"
         }
       }
-    },
-    {
-      "branch_id": "option-4",
-      "child_run_id": "42b6396b-f3aa-4238-9fb4-209b7aee1383",
-      "child_outcome": "complete",
-      "verdict": "accept",
-      "admitted": true,
-      "result_path": "reports/tournament-branches/option-4/report.json",
-      "duration_ms": 3,
-      "result_body": {
-        "verdict": "accept",
-        "option_id": "option-4",
-        "option_label": "Defer pending evidence",
-        "case_summary": "Gather missing team and product constraints before choosing.",
-        "assumptions": [
-          "The decision is reversible enough to pause briefly."
-        ],
-        "evidence_refs": [
-          "reports/decision-options.json"
-        ],
-        "risks": [
-          "The project loses momentum."
-        ],
-        "next_action": "Collect the missing constraints and rerun the decision.",
-        "rubric_model_judgments": {
-          "evidence_rigor": "pass",
-          "actionability": "pass",
-          "coverage_adequacy": "pass",
-          "scope_discipline": "pass",
-          "honest_calibration": "pass",
-          "project_specificity": "pass",
-          "insight_density": "pass",
-          "branch_distinctness": "pass"
-        }
-      },
-      "rubric_result": {
-        "dims": {
-          "evidence_rigor": {
-            "runtime_signal": "met",
-            "model_judgment": "pass",
-            "final_score": "pass",
-            "dim_score": 1,
-            "runtime_vetoed": false
-          },
-          "actionability": {
-            "runtime_signal": "met",
-            "model_judgment": "pass",
-            "final_score": "pass",
-            "dim_score": 1,
-            "runtime_vetoed": false
-          },
-          "coverage_adequacy": {
-            "runtime_signal": "met",
-            "model_judgment": "pass",
-            "final_score": "pass",
-            "dim_score": 1,
-            "runtime_vetoed": false
-          },
-          "scope_discipline": {
-            "runtime_signal": "met",
-            "model_judgment": "pass",
-            "final_score": "pass",
-            "dim_score": 1,
-            "runtime_vetoed": false
-          },
-          "honest_calibration": {
-            "runtime_signal": "n/a",
-            "model_judgment": "pass",
-            "final_score": "pass",
-            "dim_score": 1,
-            "runtime_vetoed": false
-          },
-          "project_specificity": {
-            "runtime_signal": "n/a",
-            "model_judgment": "pass",
-            "final_score": "pass",
-            "dim_score": 1,
-            "runtime_vetoed": false
-          },
-          "insight_density": {
-            "runtime_signal": "n/a",
-            "model_judgment": "pass",
-            "final_score": "pass",
-            "dim_score": 1,
-            "runtime_vetoed": false
-          },
-          "branch_distinctness": {
-            "runtime_signal": "n/a",
-            "model_judgment": "pass",
-            "final_score": "pass",
-            "dim_score": 1,
-            "runtime_vetoed": false
-          }
-        },
-        "aggregate_score": 1,
-        "runtime_veto_count": 0,
-        "tie_break": {
-          "ordered_dims": [
-            "evidence_rigor",
-            "actionability",
-            "coverage_adequacy",
-            "scope_discipline",
-            "honest_calibration",
-            "project_specificity",
-            "insight_density",
-            "branch_distinctness"
-          ],
-          "final_reason": "not-ranked"
-        }
-      }
     }
   ]
 }
 
 
-Respond with a single raw JSON object whose top-level shape is exactly: { "verdict": "<recommend|no-clear-winner|needs-operator>", "recommended_option_id": "<option-1-through-option-4>", "comparison": "<comparative assessment>", "objections": ["<objection>"], "missing_evidence": ["<missing evidence>"], "tradeoff_question": "<specific choice the operator must make>", "confidence": "<low|medium|high>" } Use the proposal aggregate and source reports. Treat this as the stress review inside the Decision stage, not as a separate canonical Review stage. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. The runtime parses your response with JSON.parse and validates the full report body against explore.tournament-review@v1 before writing reports/tournament-review.json.
+Respond with a single raw JSON object whose top-level shape is exactly: { "verdict": "<recommend|no-clear-winner|needs-operator>", "recommended_option_id": "<one generated option id>", "comparison": "<comparative assessment>", "objections": ["<objection>"], "missing_evidence": ["<missing evidence>"], "tradeoff_question": "<specific choice the operator must make>", "confidence": "<low|medium|high>" } Use the proposal aggregate and source reports. Treat this as the stress review inside the Decision stage, not as a separate canonical Review stage. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. The runtime parses your response with JSON.parse and validates the full report body against explore.tournament-review@v1 before writing reports/tournament-review.json.

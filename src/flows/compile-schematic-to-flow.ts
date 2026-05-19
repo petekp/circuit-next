@@ -322,7 +322,16 @@ function compileItem(
         check: {
           kind: 'checkpoint_selection',
           source: { kind: 'checkpoint_response', ref: 'response' },
-          allow: requireCheckField(check.allow, 'allow', item.id, 'checkpoint'),
+          ...(check.allow === undefined
+            ? {
+                allow_from: requireCheckField(
+                  check.allow_from,
+                  'allow_from',
+                  item.id,
+                  'checkpoint',
+                ),
+              }
+            : { allow: check.allow }),
         },
       } as Step;
     }
@@ -443,16 +452,16 @@ function requireWritesField(
   return value;
 }
 
-function requireCheckField(
-  value: readonly string[] | undefined,
-  field: 'required' | 'allow' | 'pass',
+function requireCheckField<T>(
+  value: T | undefined,
+  field: 'required' | 'allow' | 'allow_from' | 'pass',
   itemId: string,
   kind: string,
-): string[] {
+): T {
   if (value === undefined) {
     fail(`schematic item '${itemId}' (${kind}) is missing check.${field}`);
   }
-  return [...value];
+  return value;
 }
 
 function schematicHasOverrides(schematic: FlowSchematic): boolean {

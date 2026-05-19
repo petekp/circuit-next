@@ -326,7 +326,8 @@ export const exploreFlowData = {
                 provenance_field: 'option_id',
               },
             },
-            max_branches: 4,
+            max_branches: { kind: 'axis', axis: 'tournament_n' },
+            required_count: { kind: 'axis', axis: 'tournament_n' },
           },
           concurrency: {
             kind: 'bounded',
@@ -396,32 +397,21 @@ export const exploreFlowData = {
         protocol: 'explore-tradeoff-checkpoint@v1',
         checkpointRequestPath: 'reports/checkpoints/tradeoff-request.json',
         checkpointResponsePath: 'reports/checkpoints/tradeoff-response.json',
-        allow: ['option-1', 'option-2', 'option-3', 'option-4'],
+        check: {
+          allow_from: { kind: 'policy_choices' },
+        },
         checkpointPolicy: {
           prompt:
             'Choose the option Circuit should close with. This checkpoint only supports final option choices; ask-for-more-evidence and stop routes are intentionally not encoded until the runtime has executable route semantics for them.',
-          choices: [
-            {
-              id: 'option-1',
-              label: 'Option 1',
-              description: 'Close with the first drafted option.',
-            },
-            {
-              id: 'option-2',
-              label: 'Option 2',
-              description: 'Close with the second drafted option.',
-            },
-            {
-              id: 'option-3',
-              label: 'Option 3',
-              description: 'Close with the third drafted option.',
-            },
-            {
-              id: 'option-4',
-              label: 'Option 4',
-              description: 'Close with the fourth drafted option.',
-            },
-          ],
+          choices_from: {
+            kind: 'report_items',
+            source_report: 'reports/decision-options.json',
+            items_path: 'options',
+            id_path: 'id',
+            label_path: 'label',
+            description_path: 'summary',
+            required_count: { kind: 'axis', axis: 'tournament_n' },
+          },
           safe_default_choice: 'option-1',
         },
         routes: {

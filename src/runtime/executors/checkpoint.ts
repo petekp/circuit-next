@@ -6,7 +6,12 @@
 // resume path, not here.
 import { findCheckpointBriefBuilder } from '../../flows/registries/checkpoint-writers/registry.js';
 import { requireRuntimeIndexedStep } from '../../flows/registries/runtime-index.js';
+import type { CheckpointChoiceSource } from '../../schemas/runtime-source.js';
 import { sha256Hex } from '../../shared/connector-relay.js';
+import {
+  type CheckpointChoice,
+  resolveCheckpointChoicesSource,
+} from '../../shared/runtime-source.js';
 import type { StepOutcome } from '../domain/step.js';
 import type { CheckpointStep } from '../manifest/executable-flow.js';
 import type { RunContext } from '../run/run-context.js';
@@ -36,13 +41,52 @@ function policy(step: CheckpointStep) {
     readonly prompt: string;
     readonly safe_default_choice?: string;
     readonly safe_autonomous_choice?: string;
-    readonly choices: readonly { readonly id: string; readonly label?: string }[];
+    readonly choices?: readonly CheckpointChoice[];
+    readonly choices_from?: CheckpointChoiceSource;
   };
 }
 
-function resolveCheckpoint(step: CheckpointStep, depth: string | undefined): CheckpointResolution {
-  const effectiveDepth = depth ?? 'standard';
+async function materializePolicy(
+  step: CheckpointStep,
+  context: RunContext,
+): Promise<{
+  readonly prompt: string;
+  readonly safe_default_choice?: string;
+  readonly safe_autonomous_choice?: string;
+  readonly choices: readonly CheckpointChoice[];
+}> {
   const stepPolicy = policy(step);
+  const choices =
+    stepPolicy.choices ??
+    (stepPolicy.choices_from === undefined
+      ? undefined
+      : await resolveCheckpointChoicesSource({
+          source: stepPolicy.choices_from,
+          files: context.files,
+          ...(context.axes === undefined ? {} : { axes: context.axes }),
+          owner: `checkpoint step '${step.id}' choices_from`,
+        }));
+  if (choices === undefined || choices.length === 0) {
+    throw new Error(`checkpoint step '${step.id}' has no executable checkpoint choices`);
+  }
+  return {
+    prompt: stepPolicy.prompt,
+    choices,
+    ...(stepPolicy.safe_default_choice === undefined
+      ? {}
+      : { safe_default_choice: stepPolicy.safe_default_choice }),
+    ...(stepPolicy.safe_autonomous_choice === undefined
+      ? {}
+      : { safe_autonomous_choice: stepPolicy.safe_autonomous_choice }),
+  };
+}
+
+function resolveCheckpoint(
+  step: CheckpointStep,
+  depth: string | undefined,
+  stepPolicy: Awaited<ReturnType<typeof materializePolicy>>,
+): CheckpointResolution {
+  const effectiveDepth = depth ?? 'standard';
   if (effectiveDepth === 'deep' || effectiveDepth === 'tournament') return { kind: 'waiting' };
   if (effectiveDepth === 'autonomous') {
     const selection = stepPolicy.safe_autonomous_choice;
@@ -67,9 +111,10 @@ function resolveCheckpoint(step: CheckpointStep, depth: string | undefined): Che
 function checkpointRequestBody(input: {
   readonly step: CheckpointStep;
   readonly context: RunContext;
+  readonly stepPolicy: Awaited<ReturnType<typeof materializePolicy>>;
   readonly checkpointReportSha256?: string;
 }) {
-  const stepPolicy = policy(input.step);
+  const stepPolicy = input.stepPolicy;
   return {
     schema_version: 1,
     step_id: input.step.id,
@@ -82,6 +127,7 @@ function checkpointRequestBody(input: {
       ? {}
       : { safe_autonomous_choice: stepPolicy.safe_autonomous_choice }),
     execution_context: {
+      ...(input.context.axes === undefined ? {} : { axes: input.context.axes }),
       ...(input.context.projectRoot === undefined
         ? {}
         : { project_root: input.context.projectRoot }),
@@ -107,12 +153,13 @@ export async function executeCheckpointResult(
       );
     }
     const indexedStep = requireRuntimeIndexedStep(context.packageIndex, step.id, 'checkpoint');
+    const stepPolicy = await materializePolicy(step, context);
 
     let checkpointReportSha256: string | undefined;
     const report = step.writes?.report;
     const resumedSelection =
       context.resumeCheckpoint?.stepId === step.id ? context.resumeCheckpoint.selection : undefined;
-    const resolution = resolveCheckpoint(step, context.depth);
+    const resolution = resolveCheckpoint(step, context.depth, stepPolicy);
     if (resumedSelection === undefined) {
       if (report !== undefined) {
         const builder =
@@ -142,6 +189,7 @@ export async function executeCheckpointResult(
       const requestBody = checkpointRequestBody({
         step,
         context,
+        stepPolicy,
         ...(checkpointReportSha256 === undefined ? {} : { checkpointReportSha256 }),
       });
       await context.files.writeJson(request, requestBody);
@@ -153,7 +201,7 @@ export async function executeCheckpointResult(
         attempt,
         request_path: request.path,
         request_report_hash: sha256Hex(requestText),
-        options: step.choices,
+        options: stepPolicy.choices.map((choice) => choice.id),
         auto_resolved: resolution.kind === 'resolved' ? resolution.autoResolved : false,
       });
     }
@@ -174,7 +222,7 @@ export async function executeCheckpointResult(
           stepId: step.id,
           attempt,
           requestPath: context.files.resolve(request),
-          allowedChoices: step.choices,
+          allowedChoices: stepPolicy.choices.map((choice) => choice.id),
         },
       });
     }
@@ -192,9 +240,12 @@ export async function executeCheckpointResult(
     }
 
     const allowed = (step.check as { readonly allow?: unknown }).allow;
-    if (Array.isArray(allowed) && !allowed.includes(effectiveResolution.selection)) {
+    const effectiveAllowed = Array.isArray(allowed)
+      ? allowed
+      : stepPolicy.choices.map((choice) => choice.id);
+    if (!effectiveAllowed.includes(effectiveResolution.selection)) {
       return stepExecutionFailed(
-        `checkpoint step '${step.id}' selected '${effectiveResolution.selection}' but check.allow is [${allowed.join(', ')}]`,
+        `checkpoint step '${step.id}' selected '${effectiveResolution.selection}' but check.allow is [${effectiveAllowed.join(', ')}]`,
       );
     }
     await context.files.writeJson(response, {

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { FlowAxes } from './axes.js';
 import { ChangeKind } from './change-kind.js';
-import { FanoutJoinPolicy } from './check.js';
+import { CheckpointAllowFrom, FanoutJoinPolicy } from './check.js';
 import { Depth } from './depth.js';
 import {
   FlowBlockCatalog,
@@ -164,6 +164,7 @@ export const StepCheck = z
   .object({
     required: z.array(z.string().min(1)).min(1).optional(),
     allow: z.array(z.string().min(1)).min(1).optional(),
+    allow_from: CheckpointAllowFrom.optional(),
     pass: z.array(z.string().min(1)).min(1).optional(),
   })
   .strict();
@@ -366,7 +367,10 @@ function validateExecutionShape(
         });
       }
     };
-    const forbidField = (field: 'required' | 'allow' | 'pass', allowedKinds: string) => {
+    const forbidField = (
+      field: 'required' | 'allow' | 'allow_from' | 'pass',
+      allowedKinds: string,
+    ) => {
       if (g[field] !== undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -380,10 +384,24 @@ function validateExecutionShape(
       case 'verification':
         expectField('required', `${kind}`);
         forbidField('allow', 'checkpoint');
+        forbidField('allow_from', 'checkpoint');
         forbidField('pass', 'relay|sub-run');
         break;
       case 'checkpoint':
-        expectField('allow', 'checkpoint');
+        if (g.allow === undefined && g.allow_from === undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['check', 'allow'],
+            message: 'checkpoint execution requires check.allow or check.allow_from',
+          });
+        }
+        if (g.allow !== undefined && g.allow_from !== undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['check', 'allow'],
+            message: 'checkpoint execution cannot declare both check.allow and check.allow_from',
+          });
+        }
         forbidField('required', 'compose|verification');
         forbidField('pass', 'relay|sub-run');
         break;
@@ -392,11 +410,13 @@ function validateExecutionShape(
         expectField('pass', `${kind}`);
         forbidField('required', 'compose|verification');
         forbidField('allow', 'checkpoint');
+        forbidField('allow_from', 'checkpoint');
         break;
       case 'fanout':
         expectField('pass', 'fanout');
         forbidField('required', 'compose|verification');
         forbidField('allow', 'checkpoint');
+        forbidField('allow_from', 'checkpoint');
         break;
     }
   }

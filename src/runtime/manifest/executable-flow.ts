@@ -1,3 +1,4 @@
+import type { Axes } from '../../schemas/axes.js';
 import type { FanoutRubric } from '../../schemas/step.js';
 import type { ExecutableStage, FlowId } from '../domain/flow.js';
 import type { Routes } from '../domain/route.js';
@@ -88,4 +89,5 @@ export interface ExecutableFlow {
   readonly defaultSelection?: Selection;
   readonly stagePathPolicy?: unknown;
   readonly metadata?: Record<string, unknown>;
+  readonly axes?: Axes;
 }

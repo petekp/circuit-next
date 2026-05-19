@@ -5,6 +5,7 @@
 // graph-runner.ts. Keep manifest parsing and depth selection here so
 // graph-runner.ts can stay focused on step advancement and trace writes.
 
+import type { Axes } from '../../schemas/axes.js';
 import {
   type CompiledFlow,
   CompiledFlow as CompiledFlowSchema,
@@ -26,6 +27,7 @@ export interface CompiledFlowRunOptions extends RuntimeExecutionCapabilities {
   readonly goal: string;
   readonly entryModeName?: string;
   readonly depth?: string;
+  readonly axes?: Axes;
   readonly maxSteps?: number;
 }
 
@@ -71,6 +73,7 @@ export async function runCompiledFlowWithWaiting(
       manifestBytes: options.flowBytes,
       entryModeName,
       depth,
+      ...(options.axes === undefined ? {} : { axes: options.axes }),
       ...(options.now === undefined ? {} : { now: options.now }),
       ...(options.executors === undefined ? {} : { executors: options.executors }),
       ...(options.childExecutors === undefined ? {} : { childExecutors: options.childExecutors }),

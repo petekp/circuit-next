@@ -11649,10 +11649,14 @@ var SchemaSectionsCheck = external_exports.object({
   source: ReportSource,
   required: external_exports.array(external_exports.string().min(1)).min(1)
 }).strict();
+var CheckpointAllowFrom = external_exports.object({
+  kind: external_exports.literal("policy_choices")
+}).strict();
 var CheckpointSelectionCheck = external_exports.object({
   kind: external_exports.literal("checkpoint_selection"),
   source: CheckpointResponseSource,
-  allow: external_exports.array(external_exports.string().min(1)).min(1)
+  allow: external_exports.array(external_exports.string().min(1)).min(1).optional(),
+  allow_from: CheckpointAllowFrom.optional()
 }).strict();
 var ResultVerdictCheck = external_exports.object({
   kind: external_exports.literal("result_verdict"),
@@ -12713,6 +12717,29 @@ var RubricResult = external_exports.object({
   }
 });
 
+// dist/schemas/runtime-source.js
+var RuntimeNumberSource = external_exports.discriminatedUnion("kind", [
+  external_exports.object({
+    kind: external_exports.literal("constant"),
+    value: external_exports.number().int().nonnegative().max(256)
+  }).strict(),
+  external_exports.object({
+    kind: external_exports.literal("axis"),
+    axis: external_exports.literal("tournament_n")
+  }).strict()
+]);
+var ReportItemsSource = external_exports.object({
+  kind: external_exports.literal("report_items"),
+  source_report: RunRelativePath,
+  items_path: external_exports.string().min(1),
+  required_count: RuntimeNumberSource.optional()
+}).strict();
+var CheckpointChoiceSource = ReportItemsSource.extend({
+  id_path: external_exports.string().min(1),
+  label_path: external_exports.string().min(1).optional(),
+  description_path: external_exports.string().min(1).optional()
+}).strict();
+
 // dist/schemas/step.js
 var RelayRole = external_exports.enum(["researcher", "implementer", "reviewer"]);
 var ReportRef = external_exports.object({
@@ -12759,28 +12786,40 @@ var CheckpointPolicy = external_exports.object({
     id: external_exports.string().min(1),
     label: external_exports.string().min(1).optional(),
     description: external_exports.string().min(1).optional()
-  }).strict()).min(1),
+  }).strict()).min(1).optional(),
+  choices_from: CheckpointChoiceSource.optional(),
   safe_default_choice: external_exports.string().min(1).optional(),
   safe_autonomous_choice: external_exports.string().min(1).optional(),
   auto_resolution: AutoResolutionPolicy.optional(),
   report_template: JsonObject.optional()
 }).strict().superRefine((policy2, ctx) => {
+  const hasStaticChoices = policy2.choices !== void 0;
+  const hasDynamicChoices = policy2.choices_from !== void 0;
+  if (hasStaticChoices === hasDynamicChoices) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["choices"],
+      message: "checkpoint policy must declare exactly one of choices or choices_from"
+    });
+  }
   const choiceIds = /* @__PURE__ */ new Set();
-  for (const [index, choice] of policy2.choices.entries()) {
-    if (choiceIds.has(choice.id)) {
-      ctx.addIssue({
-        code: external_exports.ZodIssueCode.custom,
-        path: ["choices", index, "id"],
-        message: `duplicate checkpoint choice '${choice.id}'`
-      });
+  if (policy2.choices !== void 0) {
+    for (const [index, choice] of policy2.choices.entries()) {
+      if (choiceIds.has(choice.id)) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["choices", index, "id"],
+          message: `duplicate checkpoint choice '${choice.id}'`
+        });
+      }
+      choiceIds.add(choice.id);
     }
-    choiceIds.add(choice.id);
   }
   for (const [field, value] of [
     ["safe_default_choice", policy2.safe_default_choice],
     ["safe_autonomous_choice", policy2.safe_autonomous_choice]
   ]) {
-    if (value !== void 0 && !choiceIds.has(value)) {
+    if (value !== void 0 && policy2.choices !== void 0 && !choiceIds.has(value)) {
       ctx.addIssue({
         code: external_exports.ZodIssueCode.custom,
         path: [field],
@@ -12902,7 +12941,10 @@ var FanoutBranchesDynamic = external_exports.object({
   template: FanoutBranchTemplate,
   // Hard cap to prevent runaway fanouts when the source report is
   // unexpectedly large.
-  max_branches: external_exports.number().int().positive().max(256).default(16)
+  max_branches: external_exports.union([external_exports.number().int().positive().max(256), RuntimeNumberSource]).default(16),
+  // Optional exact count. Tournament fanouts use this to fail before any
+  // child relay launches when option generation drifts from the resolved N.
+  required_count: RuntimeNumberSource.optional()
 }).strict();
 var FanoutBranches = external_exports.discriminatedUnion("kind", [
   FanoutBranchesStatic,
@@ -13004,13 +13046,45 @@ var Step = external_exports.discriminatedUnion("kind", [
     });
   }
   if (step.kind === "checkpoint") {
-    const policyChoiceIds = step.policy.choices.map((choice) => choice.id).sort();
-    const checkChoiceIds = [...step.check.allow].sort();
-    if (policyChoiceIds.join("\0") !== checkChoiceIds.join("\0")) {
+    const hasStaticAllow = step.check.allow !== void 0;
+    const hasDynamicAllow = step.check.allow_from !== void 0;
+    if (hasStaticAllow === hasDynamicAllow) {
       ctx.addIssue({
         code: external_exports.ZodIssueCode.custom,
         path: ["check", "allow"],
-        message: "checkpoint check.allow must exactly match policy.choices ids"
+        message: "checkpoint check must declare exactly one of allow or allow_from"
+      });
+    }
+    if (hasStaticAllow && step.policy.choices === void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["check", "allow"],
+        message: "checkpoint check.allow requires static policy.choices"
+      });
+    }
+    if (hasDynamicAllow && step.check.allow_from?.kind !== "policy_choices") {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["check", "allow_from"],
+        message: "checkpoint check.allow_from must reference policy_choices"
+      });
+    }
+    if (step.check.allow !== void 0 && step.policy.choices !== void 0) {
+      const policyChoiceIds = step.policy.choices.map((choice) => choice.id).sort();
+      const checkChoiceIds = [...step.check.allow].sort();
+      if (policyChoiceIds.join("\0") !== checkChoiceIds.join("\0")) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["check", "allow"],
+          message: "checkpoint check.allow must exactly match policy.choices ids"
+        });
+      }
+    }
+    if (hasDynamicAllow && step.policy.choices === void 0 && step.policy.choices_from === void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["policy", "choices_from"],
+        message: "checkpoint check.allow_from requires policy.choices or policy.choices_from"
       });
     }
     if (step.writes.report !== void 0) {
@@ -13128,6 +13202,7 @@ var SchematicFanout = external_exports.object({
 var StepCheck = external_exports.object({
   required: external_exports.array(external_exports.string().min(1)).min(1).optional(),
   allow: external_exports.array(external_exports.string().min(1)).min(1).optional(),
+  allow_from: CheckpointAllowFrom.optional(),
   pass: external_exports.array(external_exports.string().min(1)).min(1).optional()
 }).strict();
 var SchematicStep = external_exports.object({
@@ -13320,10 +13395,24 @@ function validateExecutionShape(item, ctx) {
       case "verification":
         expectField("required", `${kind}`);
         forbidField("allow", "checkpoint");
+        forbidField("allow_from", "checkpoint");
         forbidField("pass", "relay|sub-run");
         break;
       case "checkpoint":
-        expectField("allow", "checkpoint");
+        if (g.allow === void 0 && g.allow_from === void 0) {
+          ctx.addIssue({
+            code: external_exports.ZodIssueCode.custom,
+            path: ["check", "allow"],
+            message: "checkpoint execution requires check.allow or check.allow_from"
+          });
+        }
+        if (g.allow !== void 0 && g.allow_from !== void 0) {
+          ctx.addIssue({
+            code: external_exports.ZodIssueCode.custom,
+            path: ["check", "allow"],
+            message: "checkpoint execution cannot declare both check.allow and check.allow_from"
+          });
+        }
         forbidField("required", "compose|verification");
         forbidField("pass", "relay|sub-run");
         break;
@@ -13332,11 +13421,13 @@ function validateExecutionShape(item, ctx) {
         expectField("pass", `${kind}`);
         forbidField("required", "compose|verification");
         forbidField("allow", "checkpoint");
+        forbidField("allow_from", "checkpoint");
         break;
       case "fanout":
         expectField("pass", "fanout");
         forbidField("required", "compose|verification");
         forbidField("allow", "checkpoint");
+        forbidField("allow_from", "checkpoint");
         break;
     }
   }
@@ -13988,13 +14079,15 @@ function resolveCheck(use, executionKind) {
     return use.required === void 0 ? void 0 : { required: use.required };
   }
   if (executionKind === "checkpoint") {
-    return use.allow === void 0 ? void 0 : { allow: use.allow };
+    if (use.allow !== void 0)
+      return { allow: use.allow };
+    return use.allowFrom === void 0 ? void 0 : { allow_from: use.allowFrom };
   }
   return use.pass === void 0 ? void 0 : { pass: use.pass };
 }
 function schematicStepInputFromBlockUse(input) {
   const { block, check, execution, use, writes } = input;
-  const { checkpointPolicy, evidenceRequirements, output, routeOverrides, skillSlots, reportPath: _reportPath, requestPath: _requestPath, receiptPath: _receiptPath, resultPath: _resultPath, branchesDirPath: _branchesDirPath, checkpointRequestPath: _checkpointRequestPath, checkpointResponsePath: _checkpointResponsePath, required: _required, allow: _allow, pass: _pass, writes: _writes, check: _check, execution: _execution, ...step } = use;
+  const { checkpointPolicy, evidenceRequirements, output, routeOverrides, skillSlots, reportPath: _reportPath, requestPath: _requestPath, receiptPath: _receiptPath, resultPath: _resultPath, branchesDirPath: _branchesDirPath, checkpointRequestPath: _checkpointRequestPath, checkpointResponsePath: _checkpointResponsePath, required: _required, allow: _allow, allowFrom: _allowFrom, pass: _pass, writes: _writes, check: _check, execution: _execution, ...step } = use;
   return {
     ...step,
     output: output ?? block.output_contract,
@@ -14696,7 +14789,7 @@ function inferBuildVerificationNeeds(goal) {
 
 // dist/flows/registries/checkpoint-writers/types.js
 function checkpointChoiceIds(step) {
-  return step.policy.choices.map((choice) => choice.id);
+  return step.policy.choices?.map((choice) => choice.id) ?? [];
 }
 
 // dist/flows/build/writers/checkpoint-brief-projection.js
@@ -14730,7 +14823,7 @@ function recommendedChoiceId(step) {
 function buildCheckpointPacket(input) {
   const allowedChoices = checkpointChoiceIds(input.context.step);
   const recommendationId = recommendedChoiceId(input.context.step);
-  const choices = input.context.step.policy.choices.filter((choice) => allowedChoices.includes(choice.id)).flatMap((choice) => {
+  const choices = (input.context.step.policy.choices ?? []).filter((choice) => allowedChoices.includes(choice.id)).flatMap((choice) => {
     const route = routeForChoice(input.context.step, choice.id);
     if (route === void 0)
       return [];
@@ -15477,7 +15570,7 @@ var exploreTournamentProposalShapeHint = {
   schema: "explore.tournament-proposal@v1",
   instruction: [
     "Respond with a single raw JSON object whose top-level shape is exactly:",
-    '{ "verdict": "accept", "option_id": "<option-1-through-option-4>", "option_label": "<option label>", "case_summary": "<strongest case for this option>", "assumptions": ["<assumption>"], "evidence_refs": ["<report path or file:line reference>"], "risks": ["<risk>"], "next_action": "<next action if this option is selected>", "rubric_model_judgments": { "evidence_rigor": "<pass|concern|fail>", "actionability": "<pass|concern|fail>", "coverage_adequacy": "<pass|concern|fail>", "scope_discipline": "<pass|concern|fail>", "honest_calibration": "<pass|concern|fail>", "project_specificity": "<pass|concern|fail>", "insight_density": "<pass|concern|fail>", "branch_distinctness": "<pass|concern|fail>" } }',
+    '{ "verdict": "accept", "option_id": "<the generated option id for this branch>", "option_label": "<option label>", "case_summary": "<strongest case for this option>", "assumptions": ["<assumption>"], "evidence_refs": ["<report path or file:line reference>"], "risks": ["<risk>"], "next_action": "<next action if this option is selected>", "rubric_model_judgments": { "evidence_rigor": "<pass|concern|fail>", "actionability": "<pass|concern|fail>", "coverage_adequacy": "<pass|concern|fail>", "scope_discipline": "<pass|concern|fail>", "honest_calibration": "<pass|concern|fail>", "project_specificity": "<pass|concern|fail>", "insight_density": "<pass|concern|fail>", "branch_distinctness": "<pass|concern|fail>" } }',
     "Set every rubric_model_judgments value from your own judgment of the branch case. Runtime checks may later veto evidence_rigor, actionability, coverage_adequacy, or scope_discipline; do not try to encode runtime_signal yourself.",
     "Argue for the option named in the branch title. Set option_id to the branch option id named in the step id and title. Do not compare every option; make the strongest evidence-backed case for this branch. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include prose before or after the JSON object.",
     "The runtime parses your response with JSON.parse and validates the full report body against explore.tournament-proposal@v1 before writing the branch report."
@@ -15488,7 +15581,7 @@ var exploreTournamentReviewShapeHint = {
   schema: "explore.tournament-review@v1",
   instruction: [
     "Respond with a single raw JSON object whose top-level shape is exactly:",
-    '{ "verdict": "<recommend|no-clear-winner|needs-operator>", "recommended_option_id": "<option-1-through-option-4>", "comparison": "<comparative assessment>", "objections": ["<objection>"], "missing_evidence": ["<missing evidence>"], "tradeoff_question": "<specific choice the operator must make>", "confidence": "<low|medium|high>" }',
+    '{ "verdict": "<recommend|no-clear-winner|needs-operator>", "recommended_option_id": "<one generated option id>", "comparison": "<comparative assessment>", "objections": ["<objection>"], "missing_evidence": ["<missing evidence>"], "tradeoff_question": "<specific choice the operator must make>", "confidence": "<low|medium|high>" }',
     "Use the proposal aggregate and source reports. Treat this as the stress review inside the Decision stage, not as a separate canonical Review stage. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences.",
     "The runtime parses your response with JSON.parse and validates the full report body against explore.tournament-review@v1 before writing reports/tournament-review.json."
   ].join(" ")
@@ -16033,18 +16126,18 @@ function explicitOptionLabels(task) {
   }
   return [];
 }
-function boundedOptionLabels(task) {
-  const explicit = explicitOptionLabels(task).slice(0, 4);
+function boundedOptionLabels(task, optionCount) {
+  const explicit = explicitOptionLabels(task).slice(0, optionCount);
   const labels = [...explicit];
   const fallbackPool = explicit.length > 0 ? EXPLICIT_FILL_LABELS : FALLBACK_LABELS;
   for (const fallback of fallbackPool) {
-    if (labels.length >= 4)
+    if (labels.length >= optionCount)
       break;
     if (!labels.some((label) => label.toLocaleLowerCase() === fallback.toLocaleLowerCase())) {
       labels.push(fallback);
     }
   }
-  return labels.slice(0, 4);
+  return labels.slice(0, optionCount);
 }
 function summaryForLabel(label, subject) {
   if (label === "Hybrid path") {
@@ -16066,7 +16159,8 @@ function promptForLabel(label, task) {
 }
 function projectExploreDecisionOptions(inputs) {
   const primaryEvidence = inputs.analysis.aspects[0]?.evidence[0]?.source ?? inputs.fallbackEvidenceRef;
-  const optionLabels = boundedOptionLabels(inputs.brief.task);
+  const optionCount = inputs.optionCount ?? 3;
+  const optionLabels = boundedOptionLabels(inputs.brief.task, optionCount);
   return ExploreDecisionOptions.parse({
     decision_question: `Which path should Circuit recommend for: ${inputs.brief.task}?`,
     recommendation_basis: "Compare the named options and bounded fallback choices against the available evidence.",
@@ -16097,7 +16191,8 @@ var exploreDecisionOptionsComposeBuilder = {
     return projectExploreDecisionOptions({
       brief,
       analysis,
-      fallbackEvidenceRef: context.step.reads[0] ?? "reports/analysis.json"
+      fallbackEvidenceRef: context.step.reads[0] ?? "reports/analysis.json",
+      ...context.axes === void 0 ? {} : { optionCount: context.axes.tournament_n }
     });
   }
 };
@@ -16472,7 +16567,8 @@ var exploreFlowData = {
                 provenance_field: "option_id"
               }
             },
-            max_branches: 4
+            max_branches: { kind: "axis", axis: "tournament_n" },
+            required_count: { kind: "axis", axis: "tournament_n" }
           },
           concurrency: {
             kind: "bounded",
@@ -16542,31 +16638,20 @@ var exploreFlowData = {
         protocol: "explore-tradeoff-checkpoint@v1",
         checkpointRequestPath: "reports/checkpoints/tradeoff-request.json",
         checkpointResponsePath: "reports/checkpoints/tradeoff-response.json",
-        allow: ["option-1", "option-2", "option-3", "option-4"],
+        check: {
+          allow_from: { kind: "policy_choices" }
+        },
         checkpointPolicy: {
           prompt: "Choose the option Circuit should close with. This checkpoint only supports final option choices; ask-for-more-evidence and stop routes are intentionally not encoded until the runtime has executable route semantics for them.",
-          choices: [
-            {
-              id: "option-1",
-              label: "Option 1",
-              description: "Close with the first drafted option."
-            },
-            {
-              id: "option-2",
-              label: "Option 2",
-              description: "Close with the second drafted option."
-            },
-            {
-              id: "option-3",
-              label: "Option 3",
-              description: "Close with the third drafted option."
-            },
-            {
-              id: "option-4",
-              label: "Option 4",
-              description: "Close with the fourth drafted option."
-            }
-          ],
+          choices_from: {
+            kind: "report_items",
+            source_report: "reports/decision-options.json",
+            items_path: "options",
+            id_path: "id",
+            label_path: "label",
+            description_path: "summary",
+            required_count: { kind: "axis", axis: "tournament_n" }
+          },
           safe_default_choice: "option-1"
         },
         routes: {
@@ -21383,7 +21468,8 @@ function validateExecutableFlow(flow) {
       }
     }
     if (step.kind === "checkpoint") {
-      if (step.choices.length === 0) {
+      const hasDynamicChoices = typeof step.policy === "object" && step.policy !== null && step.policy.choices_from !== void 0;
+      if (step.choices.length === 0 && !hasDynamicChoices) {
         issues.push(`checkpoint step '${step.id}' must declare at least one choice`);
       }
       const seenChoices = /* @__PURE__ */ new Set();
@@ -21482,7 +21568,7 @@ function convertStep(step) {
     return {
       ...base,
       kind: "checkpoint",
-      choices: step.policy.choices.map((choice) => choice.id),
+      choices: step.policy.choices?.map((choice) => choice.id) ?? [],
       policy: step.policy
     };
   }
@@ -22171,6 +22257,123 @@ function isWaitingCheckpointStepOutcome(outcome) {
   return "kind" in outcome && outcome.kind === "waiting_checkpoint";
 }
 
+// dist/shared/fanout-branch-template.js
+function resolveDottedPath(root, path) {
+  let cursor = root;
+  for (const segment of path.split(".")) {
+    if (cursor === null || typeof cursor !== "object" || Array.isArray(cursor)) {
+      throw new Error(`items_path '${path}' descended into a non-object at segment '${segment}'`);
+    }
+    cursor = cursor[segment];
+    if (cursor === void 0) {
+      throw new Error(`items_path '${path}' is missing at segment '${segment}'`);
+    }
+  }
+  return cursor;
+}
+function substituteItemPlaceholders(template, item) {
+  if (template === "$item")
+    return typeof item === "string" ? item : JSON.stringify(item);
+  const exactMatch = /^\$item\.([a-z_][a-z0-9_]*)$/i.exec(template);
+  if (exactMatch !== null) {
+    const key = exactMatch[1];
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error(`'$item.${key}' substitution requires an object item`);
+    }
+    const value = item[key];
+    if (value === void 0) {
+      throw new Error(`'$item.${key}' substitution is missing the '${key}' field on the item`);
+    }
+    return typeof value === "string" ? value : String(value);
+  }
+  return template.replace(/\$item\.([a-z_][a-z0-9_]*)/gi, (_match, key) => {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error(`'$item.${key}' substitution requires an object item`);
+    }
+    const value = item[key];
+    if (value === void 0) {
+      throw new Error(`'$item.${key}' substitution is missing the '${key}' field on the item`);
+    }
+    return typeof value === "string" ? value : String(value);
+  });
+}
+function expandTemplate(template, item) {
+  if (typeof template === "string") {
+    return substituteItemPlaceholders(template, item);
+  }
+  if (template === null || typeof template !== "object")
+    return template;
+  if (Array.isArray(template)) {
+    return template.map((entry) => expandTemplate(entry, item));
+  }
+  const out = {};
+  for (const [key, value] of Object.entries(template)) {
+    out[key] = expandTemplate(value, item);
+  }
+  return out;
+}
+
+// dist/shared/runtime-source.js
+function resolveRuntimeNumberSource(source, axes = DEFAULT_AXES) {
+  if (source.kind === "constant")
+    return source.value;
+  return axes[source.axis];
+}
+function resolvedCountLabel(source) {
+  if (source.kind === "constant")
+    return String(source.value);
+  return `axes.${source.axis}`;
+}
+async function resolveReportItemsSource(input) {
+  const sourceRaw = await input.files.readJson(input.source.source_report);
+  const items = resolveDottedPath(sourceRaw, input.source.items_path);
+  if (!Array.isArray(items)) {
+    throw new Error(`${input.owner}: items_path '${input.source.items_path}' did not resolve to an array (got ${typeof items})`);
+  }
+  if (input.source.required_count !== void 0) {
+    const expected = resolveRuntimeNumberSource(input.source.required_count, input.axes);
+    if (items.length !== expected) {
+      throw new Error(`${input.owner}: expected ${expected} items from ${input.source.source_report}.${input.source.items_path} (${resolvedCountLabel(input.source.required_count)}) but found ${items.length}`);
+    }
+  }
+  return items;
+}
+function requireItemString(input) {
+  const value = resolveDottedPath(input.item, input.path);
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`${input.owner}: item ${input.index} field '${input.path}' must be a non-empty string`);
+  }
+  return value;
+}
+async function resolveCheckpointChoicesSource(input) {
+  const items = await resolveReportItemsSource(input);
+  return items.map((item, index) => {
+    const id = requireItemString({
+      item,
+      path: input.source.id_path,
+      owner: input.owner,
+      index
+    });
+    const label = input.source.label_path === void 0 ? void 0 : requireItemString({
+      item,
+      path: input.source.label_path,
+      owner: input.owner,
+      index
+    });
+    const description = input.source.description_path === void 0 ? void 0 : requireItemString({
+      item,
+      path: input.source.description_path,
+      owner: input.owner,
+      index
+    });
+    return {
+      id,
+      ...label === void 0 ? {} : { label },
+      ...description === void 0 ? {} : { description }
+    };
+  });
+}
+
 // dist/runtime/executors/result.js
 function errorFromUnknown(error) {
   return error instanceof Error ? error : new Error(String(error));
@@ -22198,9 +22401,26 @@ function policy(step) {
   }
   return step.policy;
 }
-function resolveCheckpoint(step, depth) {
-  const effectiveDepth = depth ?? "standard";
+async function materializePolicy(step, context) {
   const stepPolicy = policy(step);
+  const choices = stepPolicy.choices ?? (stepPolicy.choices_from === void 0 ? void 0 : await resolveCheckpointChoicesSource({
+    source: stepPolicy.choices_from,
+    files: context.files,
+    ...context.axes === void 0 ? {} : { axes: context.axes },
+    owner: `checkpoint step '${step.id}' choices_from`
+  }));
+  if (choices === void 0 || choices.length === 0) {
+    throw new Error(`checkpoint step '${step.id}' has no executable checkpoint choices`);
+  }
+  return {
+    prompt: stepPolicy.prompt,
+    choices,
+    ...stepPolicy.safe_default_choice === void 0 ? {} : { safe_default_choice: stepPolicy.safe_default_choice },
+    ...stepPolicy.safe_autonomous_choice === void 0 ? {} : { safe_autonomous_choice: stepPolicy.safe_autonomous_choice }
+  };
+}
+function resolveCheckpoint(step, depth, stepPolicy) {
+  const effectiveDepth = depth ?? "standard";
   if (effectiveDepth === "deep" || effectiveDepth === "tournament")
     return { kind: "waiting" };
   if (effectiveDepth === "autonomous") {
@@ -22223,7 +22443,7 @@ function resolveCheckpoint(step, depth) {
   return { kind: "resolved", selection, resolutionSource: "safe-default", autoResolved: true };
 }
 function checkpointRequestBody(input) {
-  const stepPolicy = policy(input.step);
+  const stepPolicy = input.stepPolicy;
   return {
     schema_version: 1,
     step_id: input.step.id,
@@ -22232,6 +22452,7 @@ function checkpointRequestBody(input) {
     ...stepPolicy.safe_default_choice === void 0 ? {} : { safe_default_choice: stepPolicy.safe_default_choice },
     ...stepPolicy.safe_autonomous_choice === void 0 ? {} : { safe_autonomous_choice: stepPolicy.safe_autonomous_choice },
     execution_context: {
+      ...input.context.axes === void 0 ? {} : { axes: input.context.axes },
       ...input.context.projectRoot === void 0 ? {} : { project_root: input.context.projectRoot },
       selection_config_layers: input.context.selectionConfigLayers ?? [],
       ...input.checkpointReportSha256 === void 0 ? {} : { checkpoint_report_sha256: input.checkpointReportSha256 }
@@ -22247,10 +22468,11 @@ async function executeCheckpointResult(step, context) {
       return stepExecutionFailed(`checkpoint step '${step.id}' requires writes.request and writes.response`);
     }
     const indexedStep2 = requireRuntimeIndexedStep(context.packageIndex, step.id, "checkpoint");
+    const stepPolicy = await materializePolicy(step, context);
     let checkpointReportSha256;
     const report = step.writes?.report;
     const resumedSelection = context.resumeCheckpoint?.stepId === step.id ? context.resumeCheckpoint.selection : void 0;
-    const resolution = resolveCheckpoint(step, context.depth);
+    const resolution = resolveCheckpoint(step, context.depth, stepPolicy);
     if (resumedSelection === void 0) {
       if (report !== void 0) {
         const builder = report.schema === void 0 ? void 0 : findCheckpointBriefBuilder(report.schema);
@@ -22278,6 +22500,7 @@ async function executeCheckpointResult(step, context) {
       const requestBody = checkpointRequestBody({
         step,
         context,
+        stepPolicy,
         ...checkpointReportSha256 === void 0 ? {} : { checkpointReportSha256 }
       });
       await context.files.writeJson(request, requestBody);
@@ -22289,7 +22512,7 @@ async function executeCheckpointResult(step, context) {
         attempt,
         request_path: request.path,
         request_report_hash: sha256Hex(requestText),
-        options: step.choices,
+        options: stepPolicy.choices.map((choice) => choice.id),
         auto_resolved: resolution.kind === "resolved" ? resolution.autoResolved : false
       });
     }
@@ -22306,7 +22529,7 @@ async function executeCheckpointResult(step, context) {
           stepId: step.id,
           attempt,
           requestPath: context.files.resolve(request),
-          allowedChoices: step.choices
+          allowedChoices: stepPolicy.choices.map((choice) => choice.id)
         }
       });
     }
@@ -22323,8 +22546,9 @@ async function executeCheckpointResult(step, context) {
       return stepExecutionFailed(effectiveResolution.reason);
     }
     const allowed = step.check.allow;
-    if (Array.isArray(allowed) && !allowed.includes(effectiveResolution.selection)) {
-      return stepExecutionFailed(`checkpoint step '${step.id}' selected '${effectiveResolution.selection}' but check.allow is [${allowed.join(", ")}]`);
+    const effectiveAllowed = Array.isArray(allowed) ? allowed : stepPolicy.choices.map((choice) => choice.id);
+    if (!effectiveAllowed.includes(effectiveResolution.selection)) {
+      return stepExecutionFailed(`checkpoint step '${step.id}' selected '${effectiveResolution.selection}' but check.allow is [${effectiveAllowed.join(", ")}]`);
     }
     await context.files.writeJson(response, {
       schema_version: 1,
@@ -22417,6 +22641,7 @@ function runValueFromContext(context) {
     manifestHash: context.manifestHash,
     ...context.entryModeName === void 0 ? {} : { entryModeName: context.entryModeName },
     ...context.depth === void 0 ? {} : { depth: context.depth },
+    ...context.axes === void 0 ? {} : { axes: context.axes },
     ...context.activeStepAttempt === void 0 ? {} : { activeStepAttempt: context.activeStepAttempt },
     ...context.resumeCheckpoint === void 0 ? {} : { resumeCheckpoint: context.resumeCheckpoint }
   };
@@ -22501,6 +22726,7 @@ async function writeRegisteredComposeReport(step, context) {
       flow,
       step: indexedStep2,
       goal: context.run.goal,
+      ...context.run.axes === void 0 ? {} : { axes: context.run.axes },
       ...context.ports.worktree.projectRoot === void 0 ? {} : { projectRoot: context.ports.worktree.projectRoot },
       ...context.ports.worktree.evidencePolicy === void 0 ? {} : { evidencePolicy: context.ports.worktree.evidencePolicy },
       inputs
@@ -26227,62 +26453,6 @@ function branchNeedsWorktree(branch) {
   return branch.kind === "sub-run";
 }
 
-// dist/shared/fanout-branch-template.js
-function resolveDottedPath(root, path) {
-  let cursor = root;
-  for (const segment of path.split(".")) {
-    if (cursor === null || typeof cursor !== "object" || Array.isArray(cursor)) {
-      throw new Error(`items_path '${path}' descended into a non-object at segment '${segment}'`);
-    }
-    cursor = cursor[segment];
-    if (cursor === void 0) {
-      throw new Error(`items_path '${path}' is missing at segment '${segment}'`);
-    }
-  }
-  return cursor;
-}
-function substituteItemPlaceholders(template, item) {
-  if (template === "$item")
-    return typeof item === "string" ? item : JSON.stringify(item);
-  const exactMatch = /^\$item\.([a-z_][a-z0-9_]*)$/i.exec(template);
-  if (exactMatch !== null) {
-    const key = exactMatch[1];
-    if (item === null || typeof item !== "object" || Array.isArray(item)) {
-      throw new Error(`'$item.${key}' substitution requires an object item`);
-    }
-    const value = item[key];
-    if (value === void 0) {
-      throw new Error(`'$item.${key}' substitution is missing the '${key}' field on the item`);
-    }
-    return typeof value === "string" ? value : String(value);
-  }
-  return template.replace(/\$item\.([a-z_][a-z0-9_]*)/gi, (_match, key) => {
-    if (item === null || typeof item !== "object" || Array.isArray(item)) {
-      throw new Error(`'$item.${key}' substitution requires an object item`);
-    }
-    const value = item[key];
-    if (value === void 0) {
-      throw new Error(`'$item.${key}' substitution is missing the '${key}' field on the item`);
-    }
-    return typeof value === "string" ? value : String(value);
-  });
-}
-function expandTemplate(template, item) {
-  if (typeof template === "string") {
-    return substituteItemPlaceholders(template, item);
-  }
-  if (template === null || typeof template !== "object")
-    return template;
-  if (Array.isArray(template)) {
-    return template.map((entry) => expandTemplate(entry, item));
-  }
-  const out = {};
-  for (const [key, value] of Object.entries(template)) {
-    out[key] = expandTemplate(value, item);
-  }
-  return out;
-}
-
 // dist/runtime/fanout/branch-expansion.js
 function resolveBranch(branch) {
   if ("flow_ref" in branch) {
@@ -26307,7 +26477,7 @@ function resolveBranch(branch) {
     ...branch.selection === void 0 ? {} : { selection: branch.selection }
   };
 }
-async function expandFanoutBranches(step, files) {
+async function expandFanoutBranches(step, files, context) {
   const branches = step.branches;
   if (branches.kind === "static") {
     return branches.branches.map((branch) => resolveBranch(FanoutBranch.parse(branch)));
@@ -26317,8 +26487,15 @@ async function expandFanoutBranches(step, files) {
   if (!Array.isArray(items)) {
     throw new Error(`dynamic fanout: items_path '${branches.items_path}' did not resolve to an array (got ${typeof items})`);
   }
-  if (items.length > branches.max_branches) {
-    throw new Error(`dynamic fanout expanded to ${items.length} items but max_branches is ${branches.max_branches}`);
+  const maxBranches = typeof branches.max_branches === "number" ? branches.max_branches : resolveRuntimeNumberSource(branches.max_branches, context?.axes);
+  if (branches.required_count !== void 0) {
+    const expected = resolveRuntimeNumberSource(branches.required_count, context?.axes);
+    if (items.length !== expected) {
+      throw new Error(`dynamic fanout expected ${expected} items from '${branches.items_path}' but found ${items.length}`);
+    }
+  }
+  if (items.length > maxBranches) {
+    throw new Error(`dynamic fanout expanded to ${items.length} items but max_branches is ${maxBranches}`);
   }
   const seen = /* @__PURE__ */ new Set();
   const resolved = [];
@@ -26426,7 +26603,7 @@ async function executeFanoutInternal(step, context, relayConnector) {
   const attempt = context.activeStepAttempt ?? 1;
   const branchDirRoot = branchesDir(step);
   const aggregate = aggregateRef(step);
-  const branches = await expandFanoutBranches(step, context.files);
+  const branches = await expandFanoutBranches(step, context.files, context);
   if (branches.length === 0) {
     throw new Error(`fanout step '${step.id}': branch resolution produced zero branches`);
   }
@@ -28426,6 +28603,7 @@ async function executeExecutableFlowOutcomeUnsafe(flow, options) {
     manifestHash: resolveManifestHash(flow, options),
     ...options.entryModeName === void 0 ? {} : { entryModeName: options.entryModeName },
     ...options.depth === void 0 ? {} : { depth: options.depth },
+    ...options.axes === void 0 ? {} : { axes: options.axes },
     now: boundary.clock.now,
     files,
     trace,
@@ -28680,6 +28858,7 @@ async function runCompiledFlowWithWaiting(options) {
     manifestBytes: options.flowBytes,
     entryModeName,
     depth,
+    ...options.axes === void 0 ? {} : { axes: options.axes },
     ...options.now === void 0 ? {} : { now: options.now },
     ...options.executors === void 0 ? {} : { executors: options.executors },
     ...options.childExecutors === void 0 ? {} : { childExecutors: options.childExecutors },
@@ -28808,7 +28987,8 @@ function readCheckpointRequestContextResult(input) {
     return checkpointResumeRejected(`runtime checkpoint resume rejected: request for '${input.step.id}' is stale`);
   }
   const requestChoices = stringArray2(raw.allowed_choices);
-  if (requestChoices === void 0 || requestChoices.length !== input.step.choices.length || requestChoices.some((choice, index) => choice !== input.step.choices[index])) {
+  const expectedChoices = input.step.choices.length === 0 && requestChoices !== void 0 ? requestChoices : input.step.choices;
+  if (requestChoices === void 0 || requestChoices.length !== expectedChoices.length || requestChoices.some((choice, index) => choice !== expectedChoices[index])) {
     return checkpointResumeRejected(`runtime checkpoint resume rejected: request choices for '${input.step.id}' are stale`);
   }
   const context = raw.execution_context;
@@ -28818,6 +28998,14 @@ function readCheckpointRequestContextResult(input) {
   const projectRoot = context.project_root;
   if (projectRoot !== void 0 && typeof projectRoot !== "string") {
     return checkpointResumeRejected("runtime checkpoint resume rejected: project_root is invalid");
+  }
+  let axes;
+  if (context.axes !== void 0) {
+    try {
+      axes = Axes.parse(context.axes);
+    } catch (error) {
+      return checkpointResumeRejectedFrom(error);
+    }
   }
   let selectionConfigLayers;
   try {
@@ -28830,6 +29018,7 @@ function readCheckpointRequestContextResult(input) {
     return checkpointResumeRejected("runtime checkpoint resume rejected: checkpoint_report_sha256 is invalid");
   }
   return checkpointResumeValid({
+    ...axes === void 0 ? {} : { axes },
     ...projectRoot === void 0 ? {} : { projectRoot },
     selectionConfigLayers,
     ...checkpointReportSha256 === void 0 ? {} : { checkpointReportSha256 }
@@ -28931,7 +29120,7 @@ async function resumeCompiledFlowResult(options) {
   if (isCheckpointResumeRejectedResult(stepResult))
     return stepResult;
   const step = stepResult.value;
-  const savedChoices = step.choices;
+  const savedChoices = step.choices.length === 0 ? allowedChoices : step.choices;
   if (!sameStringArray(allowedChoices, savedChoices)) {
     return checkpointResumeRejected(`runtime checkpoint resume rejected: checkpoint trace choices for '${stepId}' are stale`);
   }
@@ -28978,6 +29167,7 @@ async function resumeCompiledFlowResult(options) {
     manifestHash: snapshot.hash,
     manifestBytes: flowBytes,
     ...depth === void 0 ? {} : { depth },
+    ...requestContext.axes === void 0 ? {} : { axes: requestContext.axes },
     ...options.now === void 0 ? {} : { now: options.now },
     ...options.executors === void 0 ? {} : { executors: options.executors },
     ...options.childCompiledFlowResolver === void 0 ? {} : { childCompiledFlowResolver: options.childCompiledFlowResolver },
@@ -31507,7 +31697,7 @@ function runtimeWaitingCheckpointProjection(input) {
       manifestIdentity: input.manifestIdentity
     });
   }
-  const savedChoices = step.policy.choices.map((choice) => choice.id);
+  const savedChoices = step.policy.choices?.map((choice) => choice.id) ?? allowedChoices;
   if (!sameStringArray2(allowedChoices, savedChoices)) {
     return invalidProjection({
       runFolder: input.runFolder,
@@ -31575,7 +31765,7 @@ function runtimeWaitingCheckpointProjection(input) {
     });
   }
   const prompt = typeof requestRecord.prompt === "string" ? requestRecord.prompt : void 0;
-  const policyChoiceLabels = new Map(step.policy.choices.map((choice) => [
+  const policyChoiceLabels = new Map((step.policy.choices ?? []).map((choice) => [
     choice.id,
     choice.label ?? choice.id
   ]));
@@ -33807,6 +33997,7 @@ async function main(argv, options = {}) {
       projectRoot,
       childCompiledFlowResolver: defaultChildCompiledFlowResolver(args.flowRoot),
       depth: selectedDepth(flow, args, route, entryModeSelection),
+      axes: selectedAxes(args, route),
       ...entryModeSelection.entryModeName === void 0 ? {} : { entryModeName: entryModeSelection.entryModeName },
       ...options.relayer === void 0 ? {} : { relayer: options.relayer },
       ...options.runtimeExecutors === void 0 ? {} : { executors: options.runtimeExecutors },

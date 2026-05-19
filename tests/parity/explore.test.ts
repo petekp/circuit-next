@@ -238,7 +238,7 @@ describe('explore runtime parity', () => {
       }
       expect(waiting.checkpoint).toMatchObject({
         stepId: 'tradeoff-checkpoint-step',
-        allowedChoices: ['option-1', 'option-2', 'option-3', 'option-4'],
+        allowedChoices: ['option-1', 'option-2', 'option-3'],
       });
       expect(existsSync(join(runDir, 'reports/checkpoints/tradeoff-response.json'))).toBe(false);
 
@@ -249,10 +249,9 @@ describe('explore runtime parity', () => {
         'React',
         'Vue',
         'Hybrid path',
-        'Defer pending evidence',
       ]);
 
-      for (const branch of ['option-1', 'option-2', 'option-3', 'option-4']) {
+      for (const branch of ['option-1', 'option-2', 'option-3']) {
         const branchDir = join(runDir, 'reports', 'tournament-branches', branch);
         expect(existsSync(join(branchDir, 'request.txt'))).toBe(true);
         expect(existsSync(join(branchDir, 'request.json'))).toBe(false);
@@ -268,12 +267,11 @@ describe('explore runtime parity', () => {
         branch_count: number;
         branches: ReadonlyArray<{ branch_id: string; result_body?: { option_id: string } }>;
       };
-      expect(aggregate.branch_count).toBe(4);
+      expect(aggregate.branch_count).toBe(3);
       expect(aggregate.branches.map((branch) => branch.branch_id).sort()).toEqual([
         'option-1',
         'option-2',
         'option-3',
-        'option-4',
       ]);
       for (const branch of aggregate.branches) {
         expect(branch.result_body?.option_id).toBe(branch.branch_id);
@@ -304,7 +302,6 @@ describe('explore runtime parity', () => {
         { label: 'React', checkpoint_choice: 'option-1' },
         { label: 'Vue', checkpoint_choice: 'option-2' },
         { label: 'Hybrid path', checkpoint_choice: 'option-3' },
-        { label: 'Defer pending evidence', checkpoint_choice: 'option-4' },
       ]);
 
       const status = projectRunStatusFromRunFolder(runDir);
@@ -316,7 +313,6 @@ describe('explore runtime parity', () => {
             { id: 'option-1', label: 'React', value: 'option-1' },
             { id: 'option-2', label: 'Vue', value: 'option-2' },
             { id: 'option-3', label: 'Hybrid path', value: 'option-3' },
-            { id: 'option-4', label: 'Defer pending evidence', value: 'option-4' },
           ],
         },
       });
