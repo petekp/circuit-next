@@ -194,7 +194,9 @@ describe('CLI runtime', () => {
     expect(output).toMatchObject({
       flow_id: 'review',
       outcome: 'complete',
-      runtime_reason: expect.stringContaining("runtime supports fresh review entry mode 'default'"),
+      runtime_reason: expect.stringContaining(
+        "runtime supports fresh review axis selection 'default'",
+      ),
     });
     expect(output).not.toHaveProperty('runtime');
   });

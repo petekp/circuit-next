@@ -1,7 +1,5 @@
 import { z } from 'zod';
 import { FlowAxes } from './axes.js';
-import { ChangeKind } from './change-kind.js';
-import { Depth } from './depth.js';
 import { CompiledFlowId, StepId } from './ids.js';
 import { RUNTIME_SUCCESS_ROUTE } from './route-policy.js';
 import { SelectionOverride } from './selection-policy.js';
@@ -16,15 +14,6 @@ export const EntrySignals = z.object({
 });
 export type EntrySignals = z.infer<typeof EntrySignals>;
 
-export const EntryMode = z.object({
-  name: z.string().regex(/^[a-z][a-z0-9-]*$/),
-  start_at: StepId,
-  depth: Depth,
-  description: z.string().min(1),
-  default_change_kind: ChangeKind.optional(),
-});
-export type EntryMode = z.infer<typeof EntryMode>;
-
 const CompiledFlowBody = z
   .object({
     schema_version: z.literal('2'),
@@ -37,8 +26,8 @@ const CompiledFlowBody = z
         intent_prefixes: z.array(z.string()).default([]),
       })
       .strict(),
-    axes: FlowAxes.optional(),
-    entry_modes: z.array(EntryMode).min(1),
+    axes: FlowAxes,
+    starts_at: StepId,
     stages: z.array(Stage).min(1),
     stage_path_policy: SpinePolicy,
     steps: z.array(Step).min(1),
@@ -84,22 +73,8 @@ const CompiledFlowStrict = CompiledFlowBody.superRefine((wf, ctx) => {
     }
   }
 
-  const entryModeNames = new Set<string>();
-  for (let i = 0; i < wf.entry_modes.length; i++) {
-    const mode = wf.entry_modes[i];
-    if (mode === undefined) continue;
-    if (entryModeNames.has(mode.name)) {
-      issueAt(ctx, ['entry_modes', i, 'name'], `duplicate entry mode: ${mode.name}`);
-    } else {
-      entryModeNames.add(mode.name);
-    }
-    if (!stepIds.has(mode.start_at as unknown as string)) {
-      issueAt(
-        ctx,
-        ['entry_modes', i, 'start_at'],
-        `entry mode start_at references unknown step: ${mode.start_at}`,
-      );
-    }
+  if (!stepIds.has(wf.starts_at as unknown as string)) {
+    issueAt(ctx, ['starts_at'], `starts_at references unknown step: ${wf.starts_at}`);
   }
 
   for (let i = 0; i < wf.steps.length; i++) {
@@ -200,12 +175,12 @@ const CompiledFlowStrict = CompiledFlowBody.superRefine((wf, ctx) => {
   }
 
   // Graph reachability checks: terminal-reaching (every step can reach a
-  // terminal route) and no-dead-steps (every step is reachable from some
-  // entry mode). Both require earlier structural checks to have held:
+  // terminal route) and no-dead-steps (every step is reachable from
+  // starts_at). Both require earlier structural checks to have held:
   // unique step ids (so adjacency can be keyed), every route target is
-  // either a terminal label or a known step, and every entry_mode.start_at
-  // is a known step id. Those preconditions are checked by the WF-I1 /
-  // WF-I2 / WF-I4 loops above; when any of them fails, we skip the
+  // either a terminal label or a known step, and starts_at is a known step
+  // id. Those preconditions are checked by the WF-I1 / WF-I2 / WF-I4 loops
+  // above; when any of them fails, we skip the
   // reachability pass so a single bad route target does not cascade into
   // noisy reachability errors.
   const noDuplicateIds = stepIds.size === wf.steps.length;
@@ -222,13 +197,7 @@ const CompiledFlowStrict = CompiledFlowBody.superRefine((wf, ctx) => {
       }
     }
   }
-  let allEntryStartsKnown = true;
-  for (const mode of wf.entry_modes) {
-    if (mode === undefined) continue;
-    if (!stepIds.has(mode.start_at as unknown as string)) {
-      allEntryStartsKnown = false;
-    }
-  }
+  const allEntryStartsKnown = stepIds.has(wf.starts_at as unknown as string);
 
   if (noDuplicateIds && allRouteTargetsKnown && allEntryStartsKnown) {
     // Terminal reachability via iterative fixpoint from steps that route
@@ -300,16 +269,12 @@ const CompiledFlowStrict = CompiledFlowBody.superRefine((wf, ctx) => {
       }
     }
 
-    // No dead steps. BFS from every entry_mode.start_at and union the
-    // reachable set; any step not reached is a silent declaration error
+    // No dead steps. BFS from starts_at; any step not reached is a silent
+    // declaration error
     // (the author intended it to execute, but no route path leads there
     // from any entry).
     const reachableFromEntry = new Set<string>();
-    const queue: string[] = [];
-    for (const mode of wf.entry_modes) {
-      if (mode === undefined) continue;
-      queue.push(mode.start_at as unknown as string);
-    }
+    const queue: string[] = [wf.starts_at as unknown as string];
     while (queue.length > 0) {
       const cur = queue.shift();
       if (cur === undefined) continue;
@@ -328,7 +293,7 @@ const CompiledFlowStrict = CompiledFlowBody.superRefine((wf, ctx) => {
         issueAt(
           ctx,
           ['steps', i],
-          `WF-I9: step '${step.id}' is not reachable from any entry_mode.start_at via the routes graph — declared but dead`,
+          `WF-I9: step '${step.id}' is not reachable from starts_at via the routes graph — declared but dead`,
         );
       }
     }

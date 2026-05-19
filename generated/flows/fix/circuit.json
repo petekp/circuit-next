@@ -21,26 +21,7 @@
       "autonomous": false
     }
   },
-  "entry_modes": [
-    {
-      "name": "default",
-      "start_at": "fix-frame",
-      "depth": "standard",
-      "description": "Default fix axis tuple."
-    },
-    {
-      "name": "deep",
-      "start_at": "fix-frame",
-      "depth": "deep",
-      "description": "deep fix axis tuple."
-    },
-    {
-      "name": "autonomous",
-      "start_at": "fix-frame",
-      "depth": "autonomous",
-      "description": "Autonomous fix axis tuple."
-    }
-  ],
+  "starts_at": "fix-frame",
   "stages": [
     {
       "id": "frame-stage",

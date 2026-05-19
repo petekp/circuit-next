@@ -22,32 +22,7 @@
     },
     "tournament_fan_out_stage": "decision-stage"
   },
-  "entry_modes": [
-    {
-      "name": "default",
-      "start_at": "frame-step",
-      "depth": "standard",
-      "description": "Default explore axis tuple."
-    },
-    {
-      "name": "lite",
-      "start_at": "frame-step",
-      "depth": "lite",
-      "description": "lite explore axis tuple."
-    },
-    {
-      "name": "deep",
-      "start_at": "frame-step",
-      "depth": "deep",
-      "description": "deep explore axis tuple."
-    },
-    {
-      "name": "autonomous",
-      "start_at": "frame-step",
-      "depth": "autonomous",
-      "description": "Autonomous explore axis tuple."
-    }
-  ],
+  "starts_at": "frame-step",
   "stages": [
     {
       "id": "frame-stage",

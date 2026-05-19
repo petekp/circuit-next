@@ -134,13 +134,6 @@ function schematicShell(overrides: {
       supports_tournament: false,
       supports_autonomous: false,
     },
-    entry_modes: [
-      {
-        name: 'default',
-        depth: 'standard',
-        description: `Default exerciser entry mode for ${overrides.id}.`,
-      },
-    ],
     stage_path_policy: {
       mode: 'partial',
       omits: overrides.stage_path_omits,

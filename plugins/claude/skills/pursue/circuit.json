@@ -21,20 +21,7 @@
       "autonomous": false
     }
   },
-  "entry_modes": [
-    {
-      "name": "default",
-      "start_at": "contract-step",
-      "depth": "standard",
-      "description": "Default pursue axis tuple."
-    },
-    {
-      "name": "autonomous",
-      "start_at": "contract-step",
-      "depth": "autonomous",
-      "description": "Autonomous pursue axis tuple."
-    }
-  ],
+  "starts_at": "contract-step",
   "stages": [
     {
       "id": "frame-stage",

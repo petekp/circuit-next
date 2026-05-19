@@ -1107,7 +1107,7 @@ describe('CLI router', () => {
     expect(bootstrap).toMatchObject({ depth: 'standard' });
   }, 30_000);
 
-  it('uses --rigor to select the matching legacy entry mode during migration', async () => {
+  it('uses --rigor to select the matching axis depth', async () => {
     const runFolder = join(runFolderBase, 'fix-depth-only');
 
     const output = await runMainJson(
@@ -1149,7 +1149,7 @@ describe('CLI router', () => {
     expect(existsSync(runFolder)).toBe(false);
   });
 
-  it('accepts --rigor lite and uses the legacy lite entry depth during migration', async () => {
+  it('accepts --rigor lite and threads lite depth into relay selection', async () => {
     const runFolder = join(runFolderBase, 'build-lite-entry-mode');
     const projectRoot = createProofProject('build-lite-entry-mode-project');
     const output = await runMainJson(
@@ -1178,7 +1178,7 @@ describe('CLI router', () => {
     expect(relayResolvedSelection).toMatchObject({ depth: 'lite' });
   }, 30_000);
 
-  it('accepts --autonomous and uses the legacy autonomous entry during migration', async () => {
+  it('accepts --autonomous and threads autonomous depth into relay selection', async () => {
     const runFolder = join(runFolderBase, 'build-autonomous-axis');
     const projectRoot = createProofProject('build-autonomous-axis-project');
     const output = await runMainJson(
@@ -1262,6 +1262,35 @@ describe('CLI router', () => {
     expect(output.entry_mode).toBe('tournament');
     expect(output.entry_mode_source).toBe('explicit');
     expect(output.outcome).toBe('checkpoint_waiting');
+  });
+
+  it('loads the tournament graph when autonomous is combined with tournament', async () => {
+    const runFolder = join(runFolderBase, 'explore-autonomous-tournament');
+    const output = await runMainJsonWithRelayer(
+      [
+        'explore',
+        '--goal',
+        'decide: React vs Vue',
+        '--tournament',
+        '--autonomous',
+        '--run-folder',
+        runFolder,
+      ],
+      tournamentRelayer(),
+    );
+    const trace = traceEntryLog(runFolder);
+
+    expect(output.flow_id).toBe('explore');
+    expect(output.entry_mode).toBe('autonomous');
+    expect(output.entry_mode_source).toBe('explicit');
+    expect(output.outcome).toBe('aborted');
+    expect(trace.map((entry) => entry.step_id)).toContain('proposal-fanout-step');
+    expect(trace).toContainEqual(
+      expect.objectContaining({
+        kind: 'step.aborted',
+        step_id: 'tradeoff-checkpoint-step',
+      }),
+    );
   });
 
   it('accepts the lower tournament N bound', async () => {

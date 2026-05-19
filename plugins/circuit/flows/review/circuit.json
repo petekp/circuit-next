@@ -21,14 +21,7 @@
       "autonomous": false
     }
   },
-  "entry_modes": [
-    {
-      "name": "default",
-      "start_at": "intake-step",
-      "depth": "standard",
-      "description": "Default review axis tuple."
-    }
-  ],
+  "starts_at": "intake-step",
   "stages": [
     {
       "id": "intake-stage",

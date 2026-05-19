@@ -120,16 +120,11 @@ export async function loadCompiledFlowFixture(flowId: string): Promise<CompiledF
   };
 }
 
-export function expectedPassStepIds(
-  flow: CompiledFlow,
-  entryModeName = flow.entry_modes[0]?.name,
-): string[] {
-  const entry = flow.entry_modes.find((mode) => mode.name === entryModeName);
-  if (entry === undefined) throw new Error(`missing entry mode ${String(entryModeName)}`);
+export function expectedPassStepIds(flow: CompiledFlow, _axisSelectionName?: string): string[] {
   const stepsById = new Map(flow.steps.map((step) => [step.id as string, step]));
   const seen = new Set<string>();
   const stepIds: string[] = [];
-  let current: string | undefined = entry.start_at;
+  let current: string | undefined = flow.starts_at;
 
   while (current !== undefined) {
     if (seen.has(current)) throw new Error(`pass route cycle at ${current}`);

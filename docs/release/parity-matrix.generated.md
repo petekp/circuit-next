@@ -27,9 +27,9 @@ This matrix compares the checked-in original Circuit snapshot with the current c
 | continuity | Continuity | feature:continuity | implemented |  |  |  |  |  |  | current: Resume is explicit and auditable through continuity record and index files.; expected: Resume is explicit and auditable. | Handoff/resume golden run. |  |
 | plan_execution | Plan execution | feature:plan-execution | implemented | /circuit:run Execute this plan:<path> |  |  |  |  | current: Plan-execution requests route into the first executable flow slice instead of ending as analysis-only Explore.; expected: Selects the first executable flow slice from plan content. |  | Plan-execution campaign-start proof. |  |
 
-## Current Route And Mode Inventory
+## Current Route And Axis Inventory
 
-| Current Flow | Entry Modes | Declared Routes | Unsupported Routes |
+| Current Flow | Axis Selections | Declared Routes | Unsupported Routes |
 | --- | --- | --- | --- |
 | review | default | complete, continue, retry, stop |  |
 | fix | autonomous, deep, default, lite | ask, complete, connector-failed, continue, escalate, handoff, retry, revise, stop | connector-failed |

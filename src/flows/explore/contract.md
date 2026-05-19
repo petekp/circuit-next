@@ -241,8 +241,7 @@ After an `explore` compiled flow is accepted:
 - The flow's stage set covers `{frame, analyze, plan, close}` with
   `stage_path_policy.mode = 'partial'` and `omits = [act, verify, review]`.
 - The flow emits five named reports in stage order (deferred enforcement).
-- The flow exposes at least one entry mode (`default` or `explore`)
-  starting at the Frame stage's step.
+- The flow starts at the Frame stage's step and declares its supported axes.
 - No execution path reaches `@complete` without passing through the configured
   critique or decision path inside Plan/Decision (deferred enforcement).
 

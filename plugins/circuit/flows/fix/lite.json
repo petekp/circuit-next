@@ -21,14 +21,7 @@
       "autonomous": false
     }
   },
-  "entry_modes": [
-    {
-      "name": "lite",
-      "start_at": "fix-frame",
-      "depth": "lite",
-      "description": "lite fix axis tuple."
-    }
-  ],
+  "starts_at": "fix-frame",
   "stages": [
     {
       "id": "frame-stage",

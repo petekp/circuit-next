@@ -23,9 +23,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { flowDefinitions, flowPackages } from '../../src/flows/catalog.js';
-import type { FlowAxes } from '../../src/schemas/axes.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
-import type { Depth } from '../../src/schemas/depth.js';
 import { FlowSchematic } from '../../src/schemas/flow-schematic.js';
 import type { SelectionOverride } from '../../src/schemas/selection-policy.js';
 
@@ -106,7 +104,7 @@ const EXPECTED_AXES_BY_FLOW: ReadonlyMap<
 // (catalog, router/compiler, types, and shared flow infrastructure).
 // Anything else under src/flows/ is expected to be a package.
 const NON_PACKAGE_FILES = new Set([
-  'axis-entry-modes.ts',
+  'axis-selections.ts',
   'block-step-expansion.ts',
   'canonical-stage-policy.ts',
   'catalog.ts',
@@ -120,38 +118,6 @@ const NON_PACKAGE_FILES = new Set([
   'types.ts',
 ]);
 
-function expectedRuntimeEntryModes(axes: FlowAxes): Array<{ entryModeName: string; depth: Depth }> {
-  const modes: Array<{ entryModeName: string; depth: Depth }> = [
-    {
-      entryModeName: 'default',
-      depth: axes.default.rigor,
-    },
-  ];
-
-  for (const rigor of axes.allowed_rigors) {
-    if (rigor === axes.default.rigor) continue;
-    modes.push({
-      entryModeName: rigor,
-      depth: rigor,
-    });
-  }
-
-  if (axes.supports_tournament) {
-    modes.push({
-      entryModeName: 'tournament',
-      depth: 'tournament',
-    });
-  }
-
-  if (axes.supports_autonomous) {
-    modes.push({
-      entryModeName: 'autonomous',
-      depth: 'autonomous',
-    });
-  }
-
-  return modes;
-}
 const NON_PACKAGE_DIRECTORIES = new Set(['registries']);
 
 function isFile(path: string): boolean {
@@ -249,7 +215,7 @@ describe('flow catalog completeness', () => {
     }
   });
 
-  it('public flow runtime surfaces match their source schematic axes projection', () => {
+  it('public flow runtime surfaces no longer carry mode/depth support rows', () => {
     const offenders: string[] = [];
 
     for (const pkg of flowPackages) {
@@ -259,15 +225,9 @@ describe('flow catalog completeness', () => {
         offenders.push(`${pkg.id}: missing runtimeSurface`);
         continue;
       }
-
-      const schematic = FlowSchematic.parse(JSON.parse(readFileSync(pkg.paths.schematic, 'utf8')));
-      const axes = schematic.axes;
-      expect(axes, `${pkg.id}: active schematic should declare axes`).toBeDefined();
-      if (axes === undefined) continue;
-      const expected = expectedRuntimeEntryModes(axes);
-      expect(surface.supportedEntryModes, `${pkg.id}: runtimeSurface entry modes drifted`).toEqual(
-        expected,
-      );
+      if ('supportedEntryModes' in surface) {
+        offenders.push(`${pkg.id}: runtimeSurface still declares supportedEntryModes`);
+      }
     }
 
     expect(offenders).toEqual([]);
@@ -298,19 +258,6 @@ describe('flow catalog completeness', () => {
     }
 
     expect(offenders).toEqual([]);
-  });
-
-  it('runtime surface keeps per-mode support visible outside one compiled fixture', () => {
-    const byId = new Map(flowPackages.map((pkg) => [pkg.id, pkg.runtimeSurface]));
-
-    expect(byId.get('fix')?.supportedEntryModes).toContainEqual({
-      entryModeName: 'lite',
-      depth: 'lite',
-    });
-    expect(byId.get('explore')?.supportedEntryModes).toContainEqual({
-      entryModeName: 'tournament',
-      depth: 'tournament',
-    });
   });
 
   it('public flow runtime surfaces own progress display metadata for every schematic item', () => {

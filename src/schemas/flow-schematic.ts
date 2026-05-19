@@ -422,9 +422,9 @@ function validateExecutionShape(
   }
 }
 
-// Schematic-level entry mode. Each emitted CompiledFlow inherits these as
-// CompiledFlow.entry_modes[i] with start_at = schematic.starts_at.
-export const FlowEntryMode = z
+// Derived axis selection. The compiler uses these internal rows to choose
+// which steps a compiled flow includes for a requested axis tuple.
+export const FlowAxisSelection = z
   .object({
     name: z.string().regex(/^[a-z][a-z0-9-]*$/),
     depth: Depth,
@@ -432,7 +432,7 @@ export const FlowEntryMode = z
     default_change_kind: ChangeKind.optional(),
   })
   .strict();
-export type FlowEntryMode = z.infer<typeof FlowEntryMode>;
+export type FlowAxisSelection = z.infer<typeof FlowAxisSelection>;
 
 // Per-canonical-stage metadata. Lets a schematic map its canonical stages
 // to author-friendly stage ids and titles ("Synthesize" for explore's
@@ -477,7 +477,6 @@ export const FlowSchematic = z
     version: z.string().min(1).optional(),
     entry: FlowSchematicEntry.optional(),
     axes: FlowAxes.optional(),
-    entry_modes: z.array(FlowEntryMode).min(1).optional(),
     stage_path_policy: SpinePolicy.optional(),
     stages: z.array(SchematicStage).optional(),
     default_selection: SelectionOverride.optional(),
@@ -541,20 +540,6 @@ export const FlowSchematic = z
         });
       }
       aliases.add(key);
-    }
-
-    if (schematic.entry_modes !== undefined) {
-      const seenNames = new Set<string>();
-      for (const [index, mode] of schematic.entry_modes.entries()) {
-        if (seenNames.has(mode.name)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['entry_modes', index, 'name'],
-            message: `duplicate entry mode name: ${mode.name}`,
-          });
-        }
-        seenNames.add(mode.name);
-      }
     }
 
     if (schematic.stages !== undefined) {

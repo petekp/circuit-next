@@ -145,14 +145,12 @@ function compiledRelayFanoutFlow(
       signals: { include: ['fanout-relay-runtime'], exclude: [] },
       intent_prefixes: ['fanout-relay-runtime'],
     },
-    entry_modes: [
-      {
-        name: 'default',
-        start_at: 'fanout-step',
-        depth: 'standard',
-        description: 'Relay fanout entry.',
-      },
-    ],
+    axes: {
+      allowed_rigors: ['standard'],
+      supports_tournament: false,
+      supports_autonomous: false,
+    },
+    starts_at: 'fanout-step',
     stages: [
       {
         id: 'plan-stage',
@@ -266,14 +264,12 @@ function childFlowBytes(): Buffer {
       version: '0.1.0',
       purpose: 'fanout child',
       entry: { signals: { include: [], exclude: [] }, intent_prefixes: [] },
-      entry_modes: [
-        {
-          name: 'default',
-          start_at: 'close',
-          depth: 'standard',
-          description: 'Default child entry',
-        },
-      ],
+      axes: {
+        allowed_rigors: ['standard'],
+        supports_tournament: false,
+        supports_autonomous: false,
+      },
+      starts_at: 'close',
       stages: [{ id: 'close-stage', title: 'Close', canonical: 'close', steps: ['close'] }],
       stage_path_policy: {
         mode: 'partial',

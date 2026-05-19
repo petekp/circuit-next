@@ -13208,7 +13208,7 @@ function validateExecutionShape(item, ctx) {
     });
   }
 }
-var FlowEntryMode = external_exports.object({
+var FlowAxisSelection = external_exports.object({
   name: external_exports.string().regex(/^[a-z][a-z0-9-]*$/),
   depth: Depth,
   description: external_exports.string().min(1),
@@ -13241,7 +13241,6 @@ var FlowSchematic = external_exports.object({
   version: external_exports.string().min(1).optional(),
   entry: FlowSchematicEntry.optional(),
   axes: FlowAxes.optional(),
-  entry_modes: external_exports.array(FlowEntryMode).min(1).optional(),
   stage_path_policy: SpinePolicy.optional(),
   stages: external_exports.array(SchematicStage).optional(),
   default_selection: SelectionOverride.optional()
@@ -13302,19 +13301,6 @@ var FlowSchematic = external_exports.object({
       });
     }
     aliases.add(key);
-  }
-  if (schematic.entry_modes !== void 0) {
-    const seenNames = /* @__PURE__ */ new Set();
-    for (const [index, mode] of schematic.entry_modes.entries()) {
-      if (seenNames.has(mode.name)) {
-        ctx.addIssue({
-          code: external_exports.ZodIssueCode.custom,
-          path: ["entry_modes", index, "name"],
-          message: `duplicate entry mode name: ${mode.name}`
-        });
-      }
-      seenNames.add(mode.name);
-    }
   }
   if (schematic.stages !== void 0) {
     const seenCanonicals = /* @__PURE__ */ new Set();
@@ -13443,41 +13429,6 @@ function validateActiveSchematicCompleteness(schematic, ctx) {
       });
     }
   }
-}
-
-// dist/flows/axis-entry-modes.js
-function entryModesForAxes(flowId, axes) {
-  const modes = [
-    {
-      name: "default",
-      depth: axes.default.rigor,
-      description: `Default ${flowId} axis tuple.`
-    }
-  ];
-  for (const rigor of axes.allowed_rigors) {
-    if (rigor === axes.default.rigor)
-      continue;
-    modes.push({
-      name: rigor,
-      depth: rigor,
-      description: `${rigor} ${flowId} axis tuple.`
-    });
-  }
-  if (axes.supports_tournament) {
-    modes.push({
-      name: "tournament",
-      depth: "tournament",
-      description: `Tournament ${flowId} axis tuple.`
-    });
-  }
-  if (axes.supports_autonomous) {
-    modes.push({
-      name: "autonomous",
-      depth: "autonomous",
-      description: `Autonomous ${flowId} axis tuple.`
-    });
-  }
-  return modes;
 }
 
 // dist/flows/report-declarations.js
@@ -13622,23 +13573,6 @@ function compilePaths(definition) {
   }
   return definition.paths.contract === void 0 ? paths : { ...paths, contract: definition.paths.contract };
 }
-function deriveSupportedEntryModes(definition) {
-  const entryModes = definition.schematic.entry_modes;
-  const axes = definition.schematic.axes;
-  if (entryModes !== void 0) {
-    return entryModes.map((mode) => ({
-      entryModeName: mode.name,
-      depth: mode.depth
-    }));
-  }
-  if (axes === void 0) {
-    throw new Error(`flow definition '${definition.id}' cannot derive runtime support without schematic axes`);
-  }
-  return entryModesForAxes(definition.id, axes).map((mode) => ({
-    entryModeName: mode.name,
-    depth: mode.depth
-  }));
-}
 function validateProgressSurface(definition, progress) {
   if (progress === void 0)
     return;
@@ -13662,11 +13596,7 @@ function compileRuntimeSurface(definition) {
   if (runtimeSurface === void 0)
     return void 0;
   validateProgressSurface(definition, runtimeSurface.progress);
-  const out = {
-    supportedEntryModes: runtimeSurface.supportedEntryModes ?? deriveSupportedEntryModes(definition)
-  };
   return {
-    ...out,
     ...runtimeSurface.primaryResult === void 0 ? {} : { primaryResult: runtimeSurface.primaryResult },
     ...runtimeSurface.progress === void 0 ? {} : { progress: runtimeSurface.progress }
   };
@@ -21336,23 +21266,12 @@ function convertStep(step) {
   };
 }
 function fromCompiledFlow(flow) {
-  const defaultEntryMode = flow.entry_modes[0];
-  if (defaultEntryMode === void 0) {
-    throw new Error(`compiled flow v1 '${flow.id}' has no entry modes`);
-  }
   const defaultSelection = toSelection(flow.default_selection);
   const executable = {
     id: flow.id,
     version: flow.version,
     purpose: flow.purpose,
-    entry: defaultEntryMode.start_at,
-    entryModes: flow.entry_modes.map((mode) => ({
-      name: mode.name,
-      startAt: mode.start_at,
-      depth: mode.depth,
-      description: mode.description,
-      ...mode.default_change_kind === void 0 ? {} : { defaultChangeKind: mode.default_change_kind }
-    })),
+    entry: flow.starts_at,
     stages: flow.stages.map((stage) => {
       const selection = toSelection(stage.selection);
       return {
@@ -21731,13 +21650,6 @@ var EntrySignals = external_exports.object({
   include: external_exports.array(external_exports.string()).default([]),
   exclude: external_exports.array(external_exports.string()).default([])
 });
-var EntryMode = external_exports.object({
-  name: external_exports.string().regex(/^[a-z][a-z0-9-]*$/),
-  start_at: StepId,
-  depth: Depth,
-  description: external_exports.string().min(1),
-  default_change_kind: ChangeKind.optional()
-});
 var CompiledFlowBody = external_exports.object({
   schema_version: external_exports.literal("2"),
   id: CompiledFlowId,
@@ -21747,8 +21659,8 @@ var CompiledFlowBody = external_exports.object({
     signals: EntrySignals,
     intent_prefixes: external_exports.array(external_exports.string()).default([])
   }).strict(),
-  axes: FlowAxes.optional(),
-  entry_modes: external_exports.array(EntryMode).min(1),
+  axes: FlowAxes,
+  starts_at: StepId,
   stages: external_exports.array(Stage).min(1),
   stage_path_policy: SpinePolicy,
   steps: external_exports.array(Step).min(1),
@@ -21792,19 +21704,8 @@ var CompiledFlowStrict = CompiledFlowBody.superRefine((wf, ctx) => {
       }
     }
   }
-  const entryModeNames = /* @__PURE__ */ new Set();
-  for (let i = 0; i < wf.entry_modes.length; i++) {
-    const mode = wf.entry_modes[i];
-    if (mode === void 0)
-      continue;
-    if (entryModeNames.has(mode.name)) {
-      issueAt3(ctx, ["entry_modes", i, "name"], `duplicate entry mode: ${mode.name}`);
-    } else {
-      entryModeNames.add(mode.name);
-    }
-    if (!stepIds.has(mode.start_at)) {
-      issueAt3(ctx, ["entry_modes", i, "start_at"], `entry mode start_at references unknown step: ${mode.start_at}`);
-    }
+  if (!stepIds.has(wf.starts_at)) {
+    issueAt3(ctx, ["starts_at"], `starts_at references unknown step: ${wf.starts_at}`);
   }
   for (let i = 0; i < wf.steps.length; i++) {
     const step = wf.steps[i];
@@ -21879,14 +21780,7 @@ var CompiledFlowStrict = CompiledFlowBody.superRefine((wf, ctx) => {
       }
     }
   }
-  let allEntryStartsKnown = true;
-  for (const mode of wf.entry_modes) {
-    if (mode === void 0)
-      continue;
-    if (!stepIds.has(mode.start_at)) {
-      allEntryStartsKnown = false;
-    }
-  }
+  const allEntryStartsKnown = stepIds.has(wf.starts_at);
   if (noDuplicateIds && allRouteTargetsKnown && allEntryStartsKnown) {
     const terminalReaching = /* @__PURE__ */ new Set();
     for (const [sid, targets] of adjacency) {
@@ -21946,12 +21840,7 @@ var CompiledFlowStrict = CompiledFlowBody.superRefine((wf, ctx) => {
       }
     }
     const reachableFromEntry = /* @__PURE__ */ new Set();
-    const queue = [];
-    for (const mode of wf.entry_modes) {
-      if (mode === void 0)
-        continue;
-      queue.push(mode.start_at);
-    }
+    const queue = [wf.starts_at];
     while (queue.length > 0) {
       const cur = queue.shift();
       if (cur === void 0)
@@ -21972,7 +21861,7 @@ var CompiledFlowStrict = CompiledFlowBody.superRefine((wf, ctx) => {
       if (step === void 0)
         continue;
       if (!reachableFromEntry.has(step.id)) {
-        issueAt3(ctx, ["steps", i], `WF-I9: step '${step.id}' is not reachable from any entry_mode.start_at via the routes graph \u2014 declared but dead`);
+        issueAt3(ctx, ["steps", i], `WF-I9: step '${step.id}' is not reachable from starts_at via the routes graph \u2014 declared but dead`);
       }
     }
   }
@@ -28447,18 +28336,19 @@ async function executeExecutableFlowWithWaiting(flow, options) {
 }
 
 // dist/runtime/run/compiled-flow-runner.js
-function selectEntryMode(flow, entryModeName) {
-  if (entryModeName === void 0) {
-    const entry2 = flow.entry_modes[0];
-    if (entry2 === void 0)
-      throw new Error(`compiled flow '${flow.id}' declares no entry modes`);
-    return entry2;
-  }
-  const entry = flow.entry_modes.find((mode) => mode.name === entryModeName);
-  if (entry === void 0) {
-    throw new Error(`compiled flow '${flow.id}' declares no entry mode named '${entryModeName}'`);
-  }
-  return entry;
+function depthForAxisSelectionName(entryModeName) {
+  if (entryModeName === "lite" || entryModeName === "deep")
+    return entryModeName;
+  if (entryModeName === "tournament" || entryModeName === "autonomous")
+    return entryModeName;
+  return void 0;
+}
+function defaultDepthForFlow(flow) {
+  if (flow.axes.default.autonomous)
+    return "autonomous";
+  if (flow.axes.default.tournament)
+    return "tournament";
+  return flow.axes.default.rigor;
 }
 function parseCompiledFlowBytes(bytes) {
   const raw = JSON.parse(Buffer.from(bytes).toString("utf8"));
@@ -28466,15 +28356,14 @@ function parseCompiledFlowBytes(bytes) {
 }
 async function runCompiledFlowWithWaiting(options) {
   const flow = parseCompiledFlowBytes(options.flowBytes);
-  const entry = selectEntryMode(flow, options.entryModeName);
   const executable = fromCompiledFlow(flow);
-  const depth = options.depth ?? entry.depth;
+  const entryModeName = options.entryModeName ?? "default";
+  const depth = options.depth ?? depthForAxisSelectionName(options.entryModeName) ?? defaultDepthForFlow(flow);
   return await executeExecutableFlowWithWaiting({
     ...executable,
-    entry: entry.start_at,
     metadata: {
       ...executable.metadata,
-      selected_entry_mode: entry.name,
+      selected_entry_mode: entryModeName,
       selected_depth: depth
     }
   }, {
@@ -28483,7 +28372,7 @@ async function runCompiledFlowWithWaiting(options) {
     goal: options.goal,
     manifestHash: computeManifestHash(options.flowBytes),
     manifestBytes: options.flowBytes,
-    entryModeName: entry.name,
+    entryModeName,
     depth,
     ...options.now === void 0 ? {} : { now: options.now },
     ...options.executors === void 0 ? {} : { executors: options.executors },
@@ -32520,7 +32409,7 @@ function loadRunBackedSnapshot(runFolder) {
   }
   const manifest = readManifestSnapshot(runFolder);
   const flow = CompiledFlow.parse(JSON.parse(Buffer.from(manifest.bytes_base64, "base64").toString("utf8")));
-  const currentStep = ("current_step" in status ? status.current_step?.step_id : void 0) ?? flow.entry_modes[0]?.start_at;
+  const currentStep = ("current_step" in status ? status.current_step?.step_id : void 0) ?? flow.starts_at;
   if (currentStep === void 0) {
     throw new Error(`cannot save run-backed continuity: ${runFolder} has no current step`);
   }
@@ -33319,7 +33208,7 @@ function resolveCompiledFlowRoute(args) {
 function hasExplicitAxes(args) {
   return args.rigorProvided || args.tournamentProvided || args.autonomousProvided;
 }
-function legacyEntryModeNameForAxes(axes) {
+function axisSelectionNameForAxes(axes) {
   if (axes.autonomous)
     return "autonomous";
   if (axes.tournament)
@@ -33328,14 +33217,23 @@ function legacyEntryModeNameForAxes(axes) {
     return axes.rigor;
   return "default";
 }
-function legacyRuntimeDepthForAxes(axes) {
+function fixtureSelectionNameForAxes(axes) {
+  if (axes.tournament)
+    return "tournament";
+  if (axes.autonomous)
+    return "autonomous";
+  if (axes.rigor === "lite" || axes.rigor === "deep")
+    return axes.rigor;
+  return "default";
+}
+function runtimeDepthForAxes(axes) {
   if (axes.autonomous)
     return "autonomous";
   if (axes.tournament)
     return "tournament";
   return axes.rigor;
 }
-function axesForLegacyEntryModeName(entryModeName) {
+function axesForAxisSelectionName(entryModeName) {
   if (entryModeName === "lite" || entryModeName === "deep") {
     return Axes.parse({ rigor: entryModeName });
   }
@@ -33351,14 +33249,14 @@ function selectedAxes(args, route) {
   if (hasExplicitAxes(args))
     return args.axes;
   if (route.inferredEntryModeName !== void 0) {
-    return axesForLegacyEntryModeName(route.inferredEntryModeName);
+    return axesForAxisSelectionName(route.inferredEntryModeName);
   }
   return args.axes;
 }
 function resolveEntryModeSelection(args, route) {
   if (hasExplicitAxes(args)) {
     return {
-      entryModeName: legacyEntryModeNameForAxes(args.axes),
+      entryModeName: axisSelectionNameForAxes(args.axes),
       source: "explicit",
       reason: "explicit axis flags"
     };
@@ -33372,44 +33270,18 @@ function resolveEntryModeSelection(args, route) {
   }
   return {};
 }
-function runtimeSupportRowsForFlow(flowId) {
-  return findFlowRuntimeSurfaceById(flowId)?.supportedEntryModes;
-}
 function progressSurfaceForFlowId(flowId) {
   return findFlowRuntimeSurfaceById(flowId)?.progress;
 }
-function axisSupportFromRows(rows) {
-  const allowedRigors = /* @__PURE__ */ new Set();
-  let supportsTournament = false;
-  let supportsAutonomous = false;
-  for (const row of rows) {
-    const rigor = Rigor.safeParse(row.depth);
-    if (rigor.success)
-      allowedRigors.add(rigor.data);
-    if (row.depth === "tournament" || row.entryModeName === "tournament") {
-      supportsTournament = true;
-    }
-    if (row.depth === "autonomous" || row.entryModeName === "autonomous") {
-      supportsAutonomous = true;
-    }
-  }
+function axisSupportFromAxes(axes) {
   return {
-    allowedRigors: Array.from(allowedRigors),
-    supportsTournament,
-    supportsAutonomous
+    allowedRigors: axes.allowed_rigors,
+    supportsTournament: axes.supports_tournament,
+    supportsAutonomous: axes.supports_autonomous
   };
 }
 function axisSupportFromFlow(input) {
-  const flowId = input.flow.id;
-  const customArchetype = input.args === void 0 || input.fixturePath === void 0 ? void 0 : customFlowArchetype({
-    flow: input.flow,
-    args: input.args,
-    fixturePath: input.fixturePath
-  });
-  const directRows = runtimeSupportRowsForFlow(flowId);
-  const customArchetypeRows = customArchetype === void 0 ? void 0 : runtimeSupportRowsForFlow(customArchetype);
-  const rows = directRows ?? customArchetypeRows ?? input.flow.entry_modes.map((mode) => ({ entryModeName: mode.name, depth: mode.depth }));
-  return axisSupportFromRows(rows);
+  return axisSupportFromAxes(input.flow.axes);
 }
 function axisAllowListText(flowId, support) {
   const rigors = support.allowedRigors.join(", ");
@@ -33471,103 +33343,26 @@ function assertFixtureMatchesRoute(flow, route) {
     throw new Error(`flow fixture id mismatch: selected flow '${route.flowName}' but fixture declares '${flowId}'`);
   }
 }
-function selectedEntryMode(flow, entryModeSelection) {
-  const entryName = entryModeSelection.entryModeName;
-  const entry = entryName === void 0 ? flow.entry_modes[0] : flow.entry_modes.find((mode) => mode.name === entryName);
-  if (entry === void 0) {
-    throw new Error(entryName === void 0 ? `flow '${flow.id}' declares no entry modes` : `flow '${flow.id}' declares no entry_mode named '${entryName}'`);
-  }
-  return entry;
+function selectedEntryModeName(_flow, entryModeSelection) {
+  return entryModeSelection.entryModeName ?? "default";
 }
-function selectedEntryModeName(flow, entryModeSelection) {
-  return selectedEntryMode(flow, entryModeSelection).name;
-}
-function selectedDepth(flow, args, route, entryModeSelection) {
+function selectedDepth(flow, args, route, _entryModeSelection) {
   if (hasExplicitAxes(args))
-    return legacyRuntimeDepthForAxes(args.axes);
+    return runtimeDepthForAxes(args.axes);
   if (route.inferredEntryModeName !== void 0)
-    return legacyRuntimeDepthForAxes(selectedAxes(args, route));
-  return selectedEntryMode(flow, entryModeSelection).depth;
-}
-function customFlowArchetype(input) {
-  if (input.args.flowRoot === void 0 || input.args.fixturePath !== void 0)
-    return void 0;
-  try {
-    const flowRoot2 = resolve11(input.args.flowRoot);
-    const manifest = JSON.parse(readFileSync25(resolve11(dirname9(flowRoot2), "manifest.json"), "utf8"));
-    if (manifest === null || typeof manifest !== "object" || Array.isArray(manifest)) {
-      return void 0;
-    }
-    const customFlows = manifest.custom_flows;
-    if (!Array.isArray(customFlows))
-      return void 0;
-    const flowId = input.flow.id;
-    const fixturePath = resolve11(input.fixturePath);
-    for (const candidate of customFlows) {
-      if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate))
-        continue;
-      const entry = candidate;
-      if (entry.id !== flowId)
-        continue;
-      if (typeof entry.flow_path !== "string" || resolve11(entry.flow_path) !== fixturePath)
-        continue;
-      return typeof entry.archetype === "string" && entry.archetype.length > 0 ? entry.archetype : void 0;
-    }
-    return void 0;
-  } catch {
-    return void 0;
-  }
+    return runtimeDepthForAxes(selectedAxes(args, route));
+  return runtimeDepthForAxes(flow.axes.default);
 }
 function classifyRuntimeSupport(input) {
   const flowId = input.flow.id;
   const entryModeName = selectedEntryModeName(input.flow, input.entryModeSelection);
   const depth = selectedDepth(input.flow, input.args, input.route, input.entryModeSelection);
-  const customArchetype = customFlowArchetype({
-    flow: input.flow,
-    args: input.args,
-    fixturePath: input.fixturePath
-  });
-  const directRows = runtimeSupportRowsForFlow(flowId);
-  const customArchetypeRows = customArchetype === void 0 ? void 0 : runtimeSupportRowsForFlow(customArchetype);
-  const rows = directRows ?? customArchetypeRows;
-  const customArchetypeSupported = directRows === void 0 && customArchetypeRows !== void 0;
-  if (rows === void 0) {
-    return {
-      kind: "unsupported",
-      flowId,
-      entryModeName,
-      depth,
-      reason: `flow '${flowId}' does not declare runtime support metadata`
-    };
-  }
-  const supported = rows.some((row) => row.entryModeName === entryModeName && row.depth === depth);
-  if (supported) {
-    return {
-      kind: "supported",
-      flowId,
-      entryModeName,
-      depth,
-      reason: !customArchetypeSupported ? `runtime supports fresh ${flowId} entry mode '${entryModeName}' at depth '${depth}'` : `runtime supports custom flow '${flowId}' via '${customArchetype}' archetype entry mode '${entryModeName}' at depth '${depth}'`
-    };
-  }
-  const supportedPairs = rows.map((row) => `${row.entryModeName}/${row.depth}`).join(", ");
-  const supportsClause = customArchetypeSupported ? `${flowId} (via '${customArchetype}' archetype) supports (mode/depth): ${supportedPairs}` : `${flowId} supports (mode/depth): ${supportedPairs}`;
-  const hasCheckpoint = input.flow.steps.some((step) => step.kind === "checkpoint");
-  if ((depth === "deep" || depth === "tournament") && hasCheckpoint) {
-    return {
-      kind: "unsupported",
-      flowId,
-      entryModeName,
-      depth,
-      reason: `checkpoint-waiting depth '${depth}' is not supported for this flow. ${supportsClause}`
-    };
-  }
   return {
-    kind: "unsupported",
+    kind: "supported",
     flowId,
     entryModeName,
     depth,
-    reason: `fresh ${flowId} entry mode '${entryModeName}' at depth '${depth}' is not supported. ${supportsClause}`
+    reason: `runtime supports fresh ${flowId} axis selection '${entryModeName}' at depth '${depth}'`
   };
 }
 async function main(argv, options = {}) {
@@ -33645,7 +33440,8 @@ async function main(argv, options = {}) {
   }
   const route = resolveCompiledFlowRoute(args);
   const entryModeSelection = resolveEntryModeSelection(args, route);
-  const fixturePath = resolveFixturePath(route.flowName, entryModeSelection.entryModeName, args.fixturePath, args.flowRoot);
+  const fixtureSelectionName = fixtureSelectionNameForAxes(selectedAxes(args, route));
+  const fixturePath = resolveFixturePath(route.flowName, fixtureSelectionName, args.fixturePath, args.flowRoot);
   const { flow, bytes } = loadFixture(fixturePath);
   assertFixtureMatchesRoute(flow, route);
   try {
@@ -33704,7 +33500,7 @@ async function main(argv, options = {}) {
       now,
       projectRoot,
       childCompiledFlowResolver: defaultChildCompiledFlowResolver(args.flowRoot),
-      ...hasExplicitAxes(args) ? { depth: legacyRuntimeDepthForAxes(args.axes) } : {},
+      depth: selectedDepth(flow, args, route, entryModeSelection),
       ...entryModeSelection.entryModeName === void 0 ? {} : { entryModeName: entryModeSelection.entryModeName },
       ...options.relayer === void 0 ? {} : { relayer: options.relayer },
       ...options.runtimeExecutors === void 0 ? {} : { executors: options.runtimeExecutors },

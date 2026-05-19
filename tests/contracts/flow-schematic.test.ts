@@ -471,7 +471,6 @@ describe('flow schematic compiler-required metadata', () => {
         supports_tournament: false,
         supports_autonomous: false,
       },
-      entry_modes: [{ name: 'default', depth: 'standard', description: 'default mode' }],
       stage_path_policy: {
         mode: 'partial',
         omits: ['analyze', 'plan', 'act', 'verify', 'review', 'close'],
@@ -678,7 +677,7 @@ describe('flow schematic compiler-required metadata', () => {
     }
   });
 
-  it('accepts schematic-level entry, axes, entry_modes, stage_path_policy, stages', () => {
+  it('accepts schematic-level entry, axes, stage_path_policy, stages', () => {
     const schematic = {
       ...baseSchematic([
         frameItemWithExtras({
@@ -693,7 +692,6 @@ describe('flow schematic compiler-required metadata', () => {
         supports_tournament: false,
         supports_autonomous: false,
       },
-      entry_modes: [{ name: 'default', depth: 'standard', description: 'default mode' }],
       stage_path_policy: {
         mode: 'partial',
         omits: ['analyze', 'plan', 'act', 'verify', 'review', 'close'],
@@ -729,7 +727,7 @@ describe('flow schematic compiler-required metadata', () => {
     }
   });
 
-  it('rejects duplicate entry mode names', () => {
+  it('rejects legacy entry_modes', () => {
     const schematic = {
       ...baseSchematic([
         frameItemWithExtras({
@@ -737,15 +735,12 @@ describe('flow schematic compiler-required metadata', () => {
           check: { required: ['scope'] },
         }),
       ]),
-      entry_modes: [
-        { name: 'default', depth: 'standard', description: 'a' },
-        { name: 'default', depth: 'lite', description: 'b' },
-      ],
+      entry_modes: [{ name: 'default', depth: 'standard', description: 'a' }],
     };
     const result = FlowSchematic.safeParse(schematic);
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.message).toMatch(/duplicate entry mode name: default/);
+      expect(result.error.message).toMatch(/Unrecognized key\(s\) in object: 'entry_modes'/);
     }
   });
 

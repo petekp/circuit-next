@@ -1,8 +1,8 @@
 // Runtime entry adapter for compiled-flow bytes.
 //
 // This file parses the saved or generated manifest bytes, chooses the
-// requested entry mode and depth, then hands the normalized executable graph
-// to graph-runner.ts. Keep manifest parsing and entry-mode selection here so
+// requested axis depth, then hands the normalized executable graph to
+// graph-runner.ts. Keep manifest parsing and depth selection here so
 // graph-runner.ts can stay focused on step advancement and trace writes.
 
 import {
@@ -29,20 +29,16 @@ export interface CompiledFlowRunOptions extends RuntimeExecutionCapabilities {
   readonly maxSteps?: number;
 }
 
-function selectEntryMode(
-  flow: CompiledFlow,
-  entryModeName: string | undefined,
-): CompiledFlow['entry_modes'][number] {
-  if (entryModeName === undefined) {
-    const entry = flow.entry_modes[0];
-    if (entry === undefined) throw new Error(`compiled flow '${flow.id}' declares no entry modes`);
-    return entry;
-  }
-  const entry = flow.entry_modes.find((mode) => mode.name === entryModeName);
-  if (entry === undefined) {
-    throw new Error(`compiled flow '${flow.id}' declares no entry mode named '${entryModeName}'`);
-  }
-  return entry;
+function depthForAxisSelectionName(entryModeName: string | undefined): string | undefined {
+  if (entryModeName === 'lite' || entryModeName === 'deep') return entryModeName;
+  if (entryModeName === 'tournament' || entryModeName === 'autonomous') return entryModeName;
+  return undefined;
+}
+
+function defaultDepthForFlow(flow: CompiledFlow): string {
+  if (flow.axes.default.autonomous) return 'autonomous';
+  if (flow.axes.default.tournament) return 'tournament';
+  return flow.axes.default.rigor;
 }
 
 export function parseCompiledFlowBytes(bytes: Uint8Array): CompiledFlow {
@@ -54,16 +50,16 @@ export async function runCompiledFlowWithWaiting(
   options: CompiledFlowRunOptions,
 ): Promise<GraphExecutionResult> {
   const flow = parseCompiledFlowBytes(options.flowBytes);
-  const entry = selectEntryMode(flow, options.entryModeName);
   const executable = fromCompiledFlow(flow);
-  const depth = options.depth ?? entry.depth;
+  const entryModeName = options.entryModeName ?? 'default';
+  const depth =
+    options.depth ?? depthForAxisSelectionName(options.entryModeName) ?? defaultDepthForFlow(flow);
   return await executeExecutableFlowWithWaiting(
     {
       ...executable,
-      entry: entry.start_at,
       metadata: {
         ...executable.metadata,
-        selected_entry_mode: entry.name,
+        selected_entry_mode: entryModeName,
         selected_depth: depth,
       },
     },
@@ -73,7 +69,7 @@ export async function runCompiledFlowWithWaiting(
       goal: options.goal,
       manifestHash: computeManifestHash(options.flowBytes),
       manifestBytes: options.flowBytes,
-      entryModeName: entry.name,
+      entryModeName,
       depth,
       ...(options.now === undefined ? {} : { now: options.now }),
       ...(options.executors === undefined ? {} : { executors: options.executors }),

@@ -1,8 +1,11 @@
 import type { FlowAxes } from '../schemas/axes.js';
-import type { FlowEntryMode } from '../schemas/flow-schematic.js';
+import type { FlowAxisSelection } from '../schemas/flow-schematic.js';
 
-export function entryModesForAxes(flowId: string, axes: FlowAxes): readonly FlowEntryMode[] {
-  const modes: FlowEntryMode[] = [
+export function axisSelectionsForAxes(
+  flowId: string,
+  axes: FlowAxes,
+): readonly FlowAxisSelection[] {
+  const selections: FlowAxisSelection[] = [
     {
       name: 'default',
       depth: axes.default.rigor,
@@ -12,7 +15,7 @@ export function entryModesForAxes(flowId: string, axes: FlowAxes): readonly Flow
 
   for (const rigor of axes.allowed_rigors) {
     if (rigor === axes.default.rigor) continue;
-    modes.push({
+    selections.push({
       name: rigor,
       depth: rigor,
       description: `${rigor} ${flowId} axis tuple.`,
@@ -20,7 +23,7 @@ export function entryModesForAxes(flowId: string, axes: FlowAxes): readonly Flow
   }
 
   if (axes.supports_tournament) {
-    modes.push({
+    selections.push({
       name: 'tournament',
       depth: 'tournament',
       description: `Tournament ${flowId} axis tuple.`,
@@ -28,12 +31,12 @@ export function entryModesForAxes(flowId: string, axes: FlowAxes): readonly Flow
   }
 
   if (axes.supports_autonomous) {
-    modes.push({
+    selections.push({
       name: 'autonomous',
       depth: 'autonomous',
       description: `Autonomous ${flowId} axis tuple.`,
     });
   }
 
-  return modes;
+  return selections;
 }

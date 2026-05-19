@@ -34,32 +34,7 @@
       "autonomous": false
     }
   },
-  "entry_modes": [
-    {
-      "name": "default",
-      "start_at": "frame-step",
-      "depth": "standard",
-      "description": "Default build axis tuple."
-    },
-    {
-      "name": "lite",
-      "start_at": "frame-step",
-      "depth": "lite",
-      "description": "lite build axis tuple."
-    },
-    {
-      "name": "deep",
-      "start_at": "frame-step",
-      "depth": "deep",
-      "description": "deep build axis tuple."
-    },
-    {
-      "name": "autonomous",
-      "start_at": "frame-step",
-      "depth": "autonomous",
-      "description": "Autonomous build axis tuple."
-    }
-  ],
+  "starts_at": "frame-step",
   "stages": [
     {
       "id": "frame-stage",
