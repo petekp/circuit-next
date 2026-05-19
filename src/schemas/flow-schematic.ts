@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FlowAxes } from './axes.js';
 import { ChangeKind } from './change-kind.js';
 import { FanoutJoinPolicy } from './check.js';
 import { Depth } from './depth.js';
@@ -475,6 +476,7 @@ export const FlowSchematic = z
     // at parse time once a schematic is active.
     version: z.string().min(1).optional(),
     entry: FlowSchematicEntry.optional(),
+    axes: FlowAxes.optional(),
     entry_modes: z.array(FlowEntryMode).min(1).optional(),
     stage_path_policy: SpinePolicy.optional(),
     stages: z.array(SchematicStage).optional(),
@@ -594,6 +596,18 @@ export const FlowSchematic = z
       // records the omission reason in stage_path_policy.
     }
 
+    if (schematic.axes?.tournament_fan_out_stage !== undefined && schematic.stages !== undefined) {
+      const stageIds = new Set(schematic.stages.map((stage) => stage.id as unknown as string));
+      const fanOutStage = schematic.axes.tournament_fan_out_stage as unknown as string;
+      if (!stageIds.has(fanOutStage)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['axes', 'tournament_fan_out_stage'],
+          message: `tournament_fan_out_stage references unknown stage id: ${fanOutStage}`,
+        });
+      }
+    }
+
     if (
       schematic.stage_path_policy !== undefined &&
       schematic.stage_path_policy.mode === 'partial'
@@ -644,9 +658,7 @@ export type FlowSchematic = z.infer<typeof FlowSchematic>;
 function validateActiveSchematicCompleteness(schematic: FlowSchematic, ctx: z.RefinementCtx): void {
   if (schematic.status !== 'active') return;
 
-  const requireField = (
-    field: 'version' | 'entry' | 'entry_modes' | 'stage_path_policy' | 'stages',
-  ) => {
+  const requireField = (field: 'version' | 'entry' | 'axes' | 'stage_path_policy' | 'stages') => {
     if (schematic[field] !== undefined) return;
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -657,7 +669,7 @@ function validateActiveSchematicCompleteness(schematic: FlowSchematic, ctx: z.Re
 
   requireField('version');
   requireField('entry');
-  requireField('entry_modes');
+  requireField('axes');
   requireField('stage_path_policy');
   requireField('stages');
 

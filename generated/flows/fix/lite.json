@@ -10,12 +10,23 @@
     },
     "intent_prefixes": ["fix", "diagnose"]
   },
+  "axes": {
+    "allowed_rigors": ["lite", "standard", "deep"],
+    "supports_tournament": false,
+    "supports_autonomous": true,
+    "default": {
+      "rigor": "standard",
+      "tournament": false,
+      "tournament_n": 3,
+      "autonomous": false
+    }
+  },
   "entry_modes": [
     {
       "name": "lite",
       "start_at": "fix-frame",
       "depth": "lite",
-      "description": "Lite Fix entry mode — skips the review relay and closes immediately after verification."
+      "description": "lite fix axis tuple."
     }
   ],
   "stages": [

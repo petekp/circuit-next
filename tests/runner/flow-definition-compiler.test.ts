@@ -155,6 +155,11 @@ function minimalDefinition(id: string) {
         signals: { include: [id], exclude: [] },
         intent_prefixes: [id],
       },
+      axes: {
+        allowed_rigors: ['standard'],
+        supports_tournament: false,
+        supports_autonomous: false,
+      },
       entry_modes: [
         {
           name: 'default',

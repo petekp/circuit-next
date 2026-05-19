@@ -129,6 +129,11 @@ function schematicShell(overrides: {
     items: overrides.items,
     version: '0.0.1',
     entry: { signals: { include: [], exclude: [] }, intent_prefixes: [] },
+    axes: {
+      allowed_rigors: ['standard'],
+      supports_tournament: false,
+      supports_autonomous: false,
+    },
     entry_modes: [
       {
         name: 'default',

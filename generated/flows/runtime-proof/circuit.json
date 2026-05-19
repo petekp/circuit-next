@@ -10,12 +10,23 @@
     },
     "intent_prefixes": ["runtime-proof"]
   },
+  "axes": {
+    "allowed_rigors": ["standard"],
+    "supports_tournament": false,
+    "supports_autonomous": false,
+    "default": {
+      "rigor": "standard",
+      "tournament": false,
+      "tournament_n": 3,
+      "autonomous": false
+    }
+  },
   "entry_modes": [
     {
-      "name": "runtime-proof",
+      "name": "default",
       "start_at": "compose-step",
       "depth": "standard",
-      "description": "Default runtime-proof entry mode; seeds the run at the compose step."
+      "description": "Default runtime-proof axis tuple."
     }
   ],
   "stages": [

@@ -7,6 +7,7 @@ import {
   Axes,
   ChangeKindDeclaration,
   Depth,
+  FlowAxes,
   Rigor,
   Role,
   isConsequentialAxes,
@@ -37,6 +38,50 @@ describe('rigor and axes', () => {
     expect(Axes.safeParse({ tournament: true, tournament_n: 4 }).success).toBe(true);
     expect(Axes.safeParse({ tournament: true, tournament_n: 1 }).success).toBe(false);
     expect(Axes.safeParse({ tournament: true, tournament_n: 5 }).success).toBe(false);
+  });
+
+  it('validates flow-owned axis allow-lists and defaults', () => {
+    expect(
+      FlowAxes.parse({
+        allowed_rigors: ['lite', 'standard', 'deep'],
+        supports_tournament: true,
+        supports_autonomous: true,
+        tournament_fan_out_stage: 'decision-stage',
+      }),
+    ).toEqual({
+      allowed_rigors: ['lite', 'standard', 'deep'],
+      supports_tournament: true,
+      supports_autonomous: true,
+      default: {
+        rigor: 'standard',
+        tournament: false,
+        tournament_n: 3,
+        autonomous: false,
+      },
+      tournament_fan_out_stage: 'decision-stage',
+    });
+
+    expect(
+      FlowAxes.safeParse({
+        allowed_rigors: ['standard'],
+        supports_tournament: false,
+        supports_autonomous: false,
+        default: { rigor: 'deep' },
+      }).success,
+    ).toBe(false);
+    expect(
+      FlowAxes.safeParse({
+        allowed_rigors: ['standard'],
+        supports_tournament: true,
+      }).success,
+    ).toBe(false);
+    expect(
+      FlowAxes.safeParse({
+        allowed_rigors: ['standard'],
+        supports_tournament: false,
+        tournament_fan_out_stage: 'decision-stage',
+      }).success,
+    ).toBe(false);
   });
 
   it('marks consequential axis combinations explicitly', () => {

@@ -10,12 +10,24 @@
     },
     "intent_prefixes": ["explore", "investigate", "decide"]
   },
+  "axes": {
+    "allowed_rigors": ["lite", "standard", "deep"],
+    "supports_tournament": true,
+    "supports_autonomous": true,
+    "default": {
+      "rigor": "standard",
+      "tournament": false,
+      "tournament_n": 3,
+      "autonomous": false
+    },
+    "tournament_fan_out_stage": "decision-stage"
+  },
   "entry_modes": [
     {
       "name": "tournament",
       "start_at": "frame-step",
       "depth": "tournament",
-      "description": "Decision tournament entry mode — frames and analyzes the question, fans out option cases, pauses for a bounded tradeoff choice, then closes with the selected decision."
+      "description": "Tournament explore axis tuple."
     }
   ],
   "stages": [

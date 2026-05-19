@@ -10,18 +10,29 @@
     },
     "intent_prefixes": ["pursue"]
   },
+  "axes": {
+    "allowed_rigors": ["standard"],
+    "supports_tournament": false,
+    "supports_autonomous": true,
+    "default": {
+      "rigor": "standard",
+      "tournament": false,
+      "tournament_n": 3,
+      "autonomous": false
+    }
+  },
   "entry_modes": [
     {
       "name": "default",
       "start_at": "contract-step",
       "depth": "standard",
-      "description": "Default Pursue entry mode."
+      "description": "Default pursue axis tuple."
     },
     {
       "name": "autonomous",
       "start_at": "contract-step",
       "depth": "autonomous",
-      "description": "Autonomous Pursue entry mode with the same serial-write safety policy."
+      "description": "Autonomous pursue axis tuple."
     }
   ],
   "stages": [

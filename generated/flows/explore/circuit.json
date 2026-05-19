@@ -10,30 +10,42 @@
     },
     "intent_prefixes": ["explore", "investigate", "decide"]
   },
+  "axes": {
+    "allowed_rigors": ["lite", "standard", "deep"],
+    "supports_tournament": true,
+    "supports_autonomous": true,
+    "default": {
+      "rigor": "standard",
+      "tournament": false,
+      "tournament_n": 3,
+      "autonomous": false
+    },
+    "tournament_fan_out_stage": "decision-stage"
+  },
   "entry_modes": [
     {
       "name": "default",
       "start_at": "frame-step",
       "depth": "standard",
-      "description": "Default explore entry mode — seeds the run at Frame at standard depth."
+      "description": "Default explore axis tuple."
     },
     {
       "name": "lite",
       "start_at": "frame-step",
       "depth": "lite",
-      "description": "Lite Explore entry mode — frames, analyzes, and closes with a compact Plan/Decision pass."
+      "description": "lite explore axis tuple."
     },
     {
       "name": "deep",
       "start_at": "frame-step",
       "depth": "deep",
-      "description": "Deep Explore entry mode — frames, analyzes, and spends more effort on Plan/Decision evidence and seam proof."
+      "description": "deep explore axis tuple."
     },
     {
       "name": "autonomous",
       "start_at": "frame-step",
       "depth": "autonomous",
-      "description": "Autonomous Explore entry mode — carries ambiguity forward when no safe checkpoint answer is available."
+      "description": "Autonomous explore axis tuple."
     }
   ],
   "stages": [

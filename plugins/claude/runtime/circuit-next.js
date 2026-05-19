@@ -11503,6 +11503,84 @@ var coerce = {
 };
 var NEVER = INVALID;
 
+// dist/schemas/ids.js
+var slugPattern = /^[a-z][a-z0-9-]*$/;
+var CompiledFlowId = external_exports.string().regex(slugPattern).brand();
+var StageId = external_exports.string().regex(slugPattern).brand();
+var StepId = external_exports.string().regex(slugPattern).brand();
+var RunId = external_exports.string().uuid().brand();
+var InvocationId = external_exports.string().regex(/^inv_[a-f0-9-]+$/).brand();
+var SkillId = external_exports.string().regex(slugPattern).brand();
+var SkillSlotId = external_exports.string().regex(slugPattern).brand();
+var ProtocolId = external_exports.string().regex(/^[a-z][a-z0-9-]*@v\d+$/).brand();
+
+// dist/schemas/rigor.js
+var Rigor = external_exports.enum(["lite", "standard", "deep"]);
+
+// dist/schemas/axes.js
+var TournamentN = external_exports.number().int().min(2).max(4);
+var Axes = external_exports.object({
+  rigor: Rigor.default("standard"),
+  tournament: external_exports.boolean().default(false),
+  tournament_n: TournamentN.default(3),
+  autonomous: external_exports.boolean().default(false)
+}).strict();
+var DEFAULT_AXES = Axes.parse({});
+var FlowAxes = external_exports.object({
+  allowed_rigors: external_exports.array(Rigor).min(1),
+  supports_tournament: external_exports.boolean().default(false),
+  supports_autonomous: external_exports.boolean().default(false),
+  default: Axes.default(DEFAULT_AXES),
+  tournament_fan_out_stage: StageId.optional()
+}).strict().superRefine((axes, ctx) => {
+  const seenRigors = /* @__PURE__ */ new Set();
+  for (const [index, rigor] of axes.allowed_rigors.entries()) {
+    if (seenRigors.has(rigor)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["allowed_rigors", index],
+        message: `duplicate allowed rigor: ${rigor}`
+      });
+    }
+    seenRigors.add(rigor);
+  }
+  if (!seenRigors.has(axes.default.rigor)) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["default", "rigor"],
+      message: `default rigor '${axes.default.rigor}' is not in allowed_rigors`
+    });
+  }
+  if (axes.default.tournament && !axes.supports_tournament) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["default", "tournament"],
+      message: "default tournament cannot be true when supports_tournament is false"
+    });
+  }
+  if (axes.default.autonomous && !axes.supports_autonomous) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["default", "autonomous"],
+      message: "default autonomous cannot be true when supports_autonomous is false"
+    });
+  }
+  if (axes.supports_tournament && axes.tournament_fan_out_stage === void 0) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["tournament_fan_out_stage"],
+      message: "tournament_fan_out_stage is required when supports_tournament is true"
+    });
+  }
+  if (!axes.supports_tournament && axes.tournament_fan_out_stage !== void 0) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["tournament_fan_out_stage"],
+      message: "tournament_fan_out_stage is only allowed when supports_tournament is true"
+    });
+  }
+});
+
 // dist/schemas/change-kind.js
 var ChangeKind = external_exports.enum([
   "ratchet-advance",
@@ -11614,18 +11692,6 @@ var Check = external_exports.discriminatedUnion("kind", [
   ResultVerdictCheck,
   FanoutAggregateCheck
 ]);
-
-// dist/schemas/rigor.js
-var Rigor = external_exports.enum(["lite", "standard", "deep"]);
-
-// dist/schemas/axes.js
-var TournamentN = external_exports.number().int().min(2).max(4);
-var Axes = external_exports.object({
-  rigor: Rigor.default("standard"),
-  tournament: external_exports.boolean().default(false),
-  tournament_n: TournamentN.default(3),
-  autonomous: external_exports.boolean().default(false)
-}).strict();
 
 // dist/schemas/depth.js
 var Depth = external_exports.enum(["lite", "standard", "deep", "tournament", "autonomous"]);
@@ -11804,17 +11870,6 @@ var FlowBlockCatalog = external_exports.object({
     }
   }
 });
-
-// dist/schemas/ids.js
-var slugPattern = /^[a-z][a-z0-9-]*$/;
-var CompiledFlowId = external_exports.string().regex(slugPattern).brand();
-var StageId = external_exports.string().regex(slugPattern).brand();
-var StepId = external_exports.string().regex(slugPattern).brand();
-var RunId = external_exports.string().uuid().brand();
-var InvocationId = external_exports.string().regex(/^inv_[a-f0-9-]+$/).brand();
-var SkillId = external_exports.string().regex(slugPattern).brand();
-var SkillSlotId = external_exports.string().regex(slugPattern).brand();
-var ProtocolId = external_exports.string().regex(/^[a-z][a-z0-9-]*@v\d+$/).brand();
 
 // dist/schemas/json.js
 var JsonPrimitive = external_exports.union([
@@ -13185,6 +13240,7 @@ var FlowSchematic = external_exports.object({
   // at parse time once a schematic is active.
   version: external_exports.string().min(1).optional(),
   entry: FlowSchematicEntry.optional(),
+  axes: FlowAxes.optional(),
   entry_modes: external_exports.array(FlowEntryMode).min(1).optional(),
   stage_path_policy: SpinePolicy.optional(),
   stages: external_exports.array(SchematicStage).optional(),
@@ -13292,6 +13348,17 @@ var FlowSchematic = external_exports.object({
       }
     }
   }
+  if (schematic.axes?.tournament_fan_out_stage !== void 0 && schematic.stages !== void 0) {
+    const stageIds = new Set(schematic.stages.map((stage) => stage.id));
+    const fanOutStage = schematic.axes.tournament_fan_out_stage;
+    if (!stageIds.has(fanOutStage)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["axes", "tournament_fan_out_stage"],
+        message: `tournament_fan_out_stage references unknown stage id: ${fanOutStage}`
+      });
+    }
+  }
   if (schematic.stage_path_policy !== void 0 && schematic.stage_path_policy.mode === "partial") {
     const seenOmits = /* @__PURE__ */ new Set();
     for (const [index, omitted] of schematic.stage_path_policy.omits.entries()) {
@@ -13343,7 +13410,7 @@ function validateActiveSchematicCompleteness(schematic, ctx) {
   };
   requireField("version");
   requireField("entry");
-  requireField("entry_modes");
+  requireField("axes");
   requireField("stage_path_policy");
   requireField("stages");
   for (const [index, item] of schematic.items.entries()) {
@@ -13376,6 +13443,41 @@ function validateActiveSchematicCompleteness(schematic, ctx) {
       });
     }
   }
+}
+
+// dist/flows/axis-entry-modes.js
+function entryModesForAxes(flowId, axes) {
+  const modes = [
+    {
+      name: "default",
+      depth: axes.default.rigor,
+      description: `Default ${flowId} axis tuple.`
+    }
+  ];
+  for (const rigor of axes.allowed_rigors) {
+    if (rigor === axes.default.rigor)
+      continue;
+    modes.push({
+      name: rigor,
+      depth: rigor,
+      description: `${rigor} ${flowId} axis tuple.`
+    });
+  }
+  if (axes.supports_tournament) {
+    modes.push({
+      name: "tournament",
+      depth: "tournament",
+      description: `Tournament ${flowId} axis tuple.`
+    });
+  }
+  if (axes.supports_autonomous) {
+    modes.push({
+      name: "autonomous",
+      depth: "autonomous",
+      description: `Autonomous ${flowId} axis tuple.`
+    });
+  }
+  return modes;
 }
 
 // dist/flows/report-declarations.js
@@ -13522,10 +13624,20 @@ function compilePaths(definition) {
 }
 function deriveSupportedEntryModes(definition) {
   const entryModes = definition.schematic.entry_modes;
-  if (entryModes === void 0) {
-    throw new Error(`flow definition '${definition.id}' cannot derive runtime support without schematic entry_modes`);
+  const axes = definition.schematic.axes;
+  if (entryModes !== void 0) {
+    return entryModes.map((mode) => ({
+      entryModeName: mode.name,
+      depth: mode.depth
+    }));
   }
-  return entryModes.map((mode) => ({ entryModeName: mode.name, depth: mode.depth }));
+  if (axes === void 0) {
+    throw new Error(`flow definition '${definition.id}' cannot derive runtime support without schematic axes`);
+  }
+  return entryModesForAxes(definition.id, axes).map((mode) => ({
+    entryModeName: mode.name,
+    depth: mode.depth
+  }));
 }
 function validateProgressSurface(definition, progress) {
   if (progress === void 0)
@@ -14882,28 +14994,17 @@ var buildFlowData = {
       },
       intent_prefixes: ["build", "implement", "develop"]
     },
-    entry_modes: [
-      {
-        name: "default",
-        depth: "standard",
-        description: "Default Build entry mode."
-      },
-      {
-        name: "lite",
-        depth: "lite",
-        description: "Lite Build entry mode."
-      },
-      {
-        name: "deep",
-        depth: "deep",
-        description: "Deep Build entry mode."
-      },
-      {
-        name: "autonomous",
-        depth: "autonomous",
-        description: "Autonomous Build entry mode."
+    axes: {
+      allowed_rigors: ["lite", "standard", "deep"],
+      supports_tournament: false,
+      supports_autonomous: true,
+      default: {
+        rigor: "standard",
+        tournament: false,
+        tournament_n: 3,
+        autonomous: false
       }
-    ],
+    },
     stage_path_policy: {
       mode: "partial",
       omits: ["analyze"],
@@ -15987,33 +16088,18 @@ var exploreFlowData = {
       },
       intent_prefixes: ["explore", "investigate", "decide"]
     },
-    entry_modes: [
-      {
-        name: "default",
-        depth: "standard",
-        description: "Default explore entry mode \u2014 seeds the run at Frame at standard depth."
+    axes: {
+      allowed_rigors: ["lite", "standard", "deep"],
+      supports_tournament: true,
+      supports_autonomous: true,
+      default: {
+        rigor: "standard",
+        tournament: false,
+        tournament_n: 3,
+        autonomous: false
       },
-      {
-        name: "lite",
-        depth: "lite",
-        description: "Lite Explore entry mode \u2014 frames, analyzes, and closes with a compact Plan/Decision pass."
-      },
-      {
-        name: "deep",
-        depth: "deep",
-        description: "Deep Explore entry mode \u2014 frames, analyzes, and spends more effort on Plan/Decision evidence and seam proof."
-      },
-      {
-        name: "tournament",
-        depth: "tournament",
-        description: "Decision tournament entry mode \u2014 frames and analyzes the question, fans out option cases, pauses for a bounded tradeoff choice, then closes with the selected decision."
-      },
-      {
-        name: "autonomous",
-        depth: "autonomous",
-        description: "Autonomous Explore entry mode \u2014 carries ambiguity forward when no safe checkpoint answer is available."
-      }
-    ],
+      tournament_fan_out_stage: "decision-stage"
+    },
     stage_path_policy: {
       mode: "partial",
       omits: ["act", "verify", "review"],
@@ -18174,28 +18260,17 @@ var fixFlowData = {
       },
       intent_prefixes: ["fix", "diagnose"]
     },
-    entry_modes: [
-      {
-        name: "default",
-        depth: "standard",
-        description: "Default Fix entry mode \u2014 standard depth with full review pass."
-      },
-      {
-        name: "lite",
-        depth: "lite",
-        description: "Lite Fix entry mode \u2014 skips the review relay and closes immediately after verification."
-      },
-      {
-        name: "deep",
-        depth: "deep",
-        description: "Deep Fix entry mode \u2014 standard graph at deep depth (more thorough analysis and review)."
-      },
-      {
-        name: "autonomous",
-        depth: "autonomous",
-        description: "Autonomous Fix entry mode \u2014 standard graph at autonomous depth; safe-default checkpoint choices apply."
+    axes: {
+      allowed_rigors: ["lite", "standard", "deep"],
+      supports_tournament: false,
+      supports_autonomous: true,
+      default: {
+        rigor: "standard",
+        tournament: false,
+        tournament_n: 3,
+        autonomous: false
       }
-    ],
+    },
     stage_path_policy: {
       mode: "partial",
       omits: ["plan"],
@@ -19616,18 +19691,17 @@ var pursueFlowData = {
       },
       intent_prefixes: ["pursue"]
     },
-    entry_modes: [
-      {
-        name: "default",
-        depth: "standard",
-        description: "Default Pursue entry mode."
-      },
-      {
-        name: "autonomous",
-        depth: "autonomous",
-        description: "Autonomous Pursue entry mode with the same serial-write safety policy."
+    axes: {
+      allowed_rigors: ["standard"],
+      supports_tournament: false,
+      supports_autonomous: true,
+      default: {
+        rigor: "standard",
+        tournament: false,
+        tournament_n: 3,
+        autonomous: false
       }
-    ],
+    },
     stage_path_policy: PURSUE_STAGE_POLICY.stagePathPolicy,
     stages: [
       {
@@ -20474,13 +20548,17 @@ var reviewFlowData = {
       },
       intent_prefixes: ["review"]
     },
-    entry_modes: [
-      {
-        name: "default",
-        depth: "standard",
-        description: "Default review entry mode \u2014 resolves the review scope, relays an independent audit, then writes the verdict report."
+    axes: {
+      allowed_rigors: ["standard"],
+      supports_tournament: false,
+      supports_autonomous: false,
+      default: {
+        rigor: "standard",
+        tournament: false,
+        tournament_n: 3,
+        autonomous: false
       }
-    ],
+    },
     stage_path_policy: {
       mode: "partial",
       omits: ["plan", "act", "verify", "review"],
@@ -20661,13 +20739,17 @@ var runtimeProofSchematic = {
     },
     intent_prefixes: ["runtime-proof"]
   },
-  entry_modes: [
-    {
-      name: "runtime-proof",
-      depth: "standard",
-      description: "Default runtime-proof entry mode; seeds the run at the compose step."
+  axes: {
+    allowed_rigors: ["standard"],
+    supports_tournament: false,
+    supports_autonomous: false,
+    default: {
+      rigor: "standard",
+      tournament: false,
+      tournament_n: 3,
+      autonomous: false
     }
-  ],
+  },
   stage_path_policy: {
     mode: "partial",
     omits: ["frame", "analyze", "verify", "review", "close"],
@@ -21665,6 +21747,7 @@ var CompiledFlowBody = external_exports.object({
     signals: EntrySignals,
     intent_prefixes: external_exports.array(external_exports.string()).default([])
   }).strict(),
+  axes: FlowAxes.optional(),
   entry_modes: external_exports.array(EntryMode).min(1),
   stages: external_exports.array(Stage).min(1),
   stage_path_policy: SpinePolicy,

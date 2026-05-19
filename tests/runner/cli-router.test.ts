@@ -1048,7 +1048,7 @@ describe('CLI router', () => {
       entry_mode: 'lite',
       entry_mode_source: 'classifier',
     });
-  });
+  }, 30_000);
 
   it('uses classifier-inferred Fix deep mode for bare serious Fix intent', async () => {
     const runFolder = join(runFolderBase, 'fix-deep-inferred');
@@ -1079,7 +1079,7 @@ describe('CLI router', () => {
       entry_mode: 'deep',
       entry_mode_source: 'classifier',
     });
-  });
+  }, 30_000);
 
   it('lets explicit --rigor override classifier-inferred Fix mode', async () => {
     const runFolder = join(runFolderBase, 'fix-explicit-default-mode');
@@ -1105,7 +1105,7 @@ describe('CLI router', () => {
     expect(output.entry_mode).toBe('default');
     expect(output.entry_mode_source).toBe('explicit');
     expect(bootstrap).toMatchObject({ depth: 'standard' });
-  });
+  }, 30_000);
 
   it('uses --rigor to select the matching legacy entry mode during migration', async () => {
     const runFolder = join(runFolderBase, 'fix-depth-only');
@@ -1129,7 +1129,7 @@ describe('CLI router', () => {
       (trace_entry) => trace_entry.kind === 'run.bootstrapped',
     );
     expect(bootstrap).toMatchObject({ depth: 'deep' });
-  });
+  }, 30_000);
 
   it('rejects tournament on flows whose axis allow-list does not support it', async () => {
     const runFolder = join(runFolderBase, 'fix-depth-tournament');

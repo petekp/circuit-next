@@ -466,6 +466,11 @@ describe('flow schematic compiler-required metadata', () => {
       status: 'active',
       version: '0.1.0',
       entry: { signals: { include: ['demo'], exclude: [] }, intent_prefixes: ['demo'] },
+      axes: {
+        allowed_rigors: ['standard'],
+        supports_tournament: false,
+        supports_autonomous: false,
+      },
       entry_modes: [{ name: 'default', depth: 'standard', description: 'default mode' }],
       stage_path_policy: {
         mode: 'partial',
@@ -497,7 +502,7 @@ describe('flow schematic compiler-required metadata', () => {
     if (!result.success) {
       expect(result.error.message).toMatch(/active schematic requires version/);
       expect(result.error.message).toMatch(/active schematic requires entry/);
-      expect(result.error.message).toMatch(/active schematic requires entry_modes/);
+      expect(result.error.message).toMatch(/active schematic requires axes/);
       expect(result.error.message).toMatch(/active schematic requires stage_path_policy/);
       expect(result.error.message).toMatch(/active schematic requires stages/);
     }
@@ -673,7 +678,7 @@ describe('flow schematic compiler-required metadata', () => {
     }
   });
 
-  it('accepts schematic-level entry, entry_modes, stage_path_policy, stages', () => {
+  it('accepts schematic-level entry, axes, entry_modes, stage_path_policy, stages', () => {
     const schematic = {
       ...baseSchematic([
         frameItemWithExtras({
@@ -683,6 +688,11 @@ describe('flow schematic compiler-required metadata', () => {
       ]),
       version: '0.1.0',
       entry: { signals: { include: ['demo'], exclude: [] }, intent_prefixes: ['demo'] },
+      axes: {
+        allowed_rigors: ['standard'],
+        supports_tournament: false,
+        supports_autonomous: false,
+      },
       entry_modes: [{ name: 'default', depth: 'standard', description: 'default mode' }],
       stage_path_policy: {
         mode: 'partial',
@@ -693,6 +703,30 @@ describe('flow schematic compiler-required metadata', () => {
     };
     const result = FlowSchematic.safeParse(schematic);
     expect(result.success).toBe(true);
+  });
+
+  it('rejects a tournament fan-out stage that is not declared by the schematic', () => {
+    const schematic = {
+      ...activeSchematic([
+        frameItemWithExtras({
+          writes: { report_path: 'reports/brief.json' },
+          check: { required: ['scope'] },
+        }),
+      ]),
+      axes: {
+        allowed_rigors: ['standard'],
+        supports_tournament: true,
+        supports_autonomous: false,
+        tournament_fan_out_stage: 'missing-stage',
+      },
+    };
+    const result = FlowSchematic.safeParse(schematic);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(
+        /tournament_fan_out_stage references unknown stage id: missing-stage/,
+      );
+    }
   });
 
   it('rejects duplicate entry mode names', () => {

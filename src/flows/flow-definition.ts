@@ -4,6 +4,7 @@ import {
   FlowSchematic,
   type FlowSchematic as FlowSchematicValue,
 } from '../schemas/flow-schematic.js';
+import { entryModesForAxes } from './axis-entry-modes.js';
 import {
   buildCheckpointRegistry,
   buildCloseRegistry,
@@ -241,12 +242,22 @@ function deriveSupportedEntryModes(
   definition: FlowDefinition,
 ): CompiledFlowRuntimeSurface['supportedEntryModes'] {
   const entryModes = definition.schematic.entry_modes;
-  if (entryModes === undefined) {
+  const axes = definition.schematic.axes;
+  if (entryModes !== undefined) {
+    return entryModes.map((mode) => ({
+      entryModeName: mode.name,
+      depth: mode.depth,
+    }));
+  }
+  if (axes === undefined) {
     throw new Error(
-      `flow definition '${definition.id}' cannot derive runtime support without schematic entry_modes`,
+      `flow definition '${definition.id}' cannot derive runtime support without schematic axes`,
     );
   }
-  return entryModes.map((mode) => ({ entryModeName: mode.name, depth: mode.depth }));
+  return entryModesForAxes(definition.id, axes).map((mode) => ({
+    entryModeName: mode.name,
+    depth: mode.depth,
+  }));
 }
 
 function validateProgressSurface(

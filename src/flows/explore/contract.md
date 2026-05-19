@@ -47,6 +47,13 @@ used by contract tests and generated flow loading. Reopen triggers for this seam
 duplicate `id` across flow packages; an `explore-mini` or `research` flow with
 no explicit policy entry; or landing of the `CompiledFlow.kind` field.
 
+## Axis Support
+
+Explore declares `axes.allowed_rigors = [lite, standard, deep]`, supports
+tournament and autonomous runs, and declares `decision-stage` as the
+tournament fan-out stage. The default axis tuple is standard, non-tournament,
+and interactive with `tournament_n = 3`.
+
 ## Result-path split
 
 `explore.result` and `run.result` originally both registered their

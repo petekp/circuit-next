@@ -138,31 +138,17 @@ export const fixFlowData = {
       },
       intent_prefixes: ['fix', 'diagnose'],
     },
-    entry_modes: [
-      {
-        name: 'default',
-        depth: 'standard',
-        description: 'Default Fix entry mode — standard depth with full review pass.',
+    axes: {
+      allowed_rigors: ['lite', 'standard', 'deep'],
+      supports_tournament: false,
+      supports_autonomous: true,
+      default: {
+        rigor: 'standard',
+        tournament: false,
+        tournament_n: 3,
+        autonomous: false,
       },
-      {
-        name: 'lite',
-        depth: 'lite',
-        description:
-          'Lite Fix entry mode — skips the review relay and closes immediately after verification.',
-      },
-      {
-        name: 'deep',
-        depth: 'deep',
-        description:
-          'Deep Fix entry mode — standard graph at deep depth (more thorough analysis and review).',
-      },
-      {
-        name: 'autonomous',
-        depth: 'autonomous',
-        description:
-          'Autonomous Fix entry mode — standard graph at autonomous depth; safe-default checkpoint choices apply.',
-      },
-    ],
+    },
     stage_path_policy: {
       mode: 'partial',
       omits: ['plan'],

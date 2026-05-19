@@ -42,6 +42,7 @@ import {
 import type { CanonicalStage } from '../schemas/stage.js';
 import { CANONICAL_STAGES } from '../schemas/stage.js';
 import type { Step } from '../schemas/step.js';
+import { entryModesForAxes } from './axis-entry-modes.js';
 import { findCheckpointBriefBuilder } from './registries/checkpoint-writers/registry.js';
 import { findVerificationWriter } from './registries/verification-writers/registry.js';
 
@@ -486,6 +487,7 @@ interface SchematicFrame {
     signals: { include: readonly string[]; exclude: readonly string[] };
     intent_prefixes: readonly string[];
   };
+  axes: NonNullable<FlowSchematic['axes']>;
   startsAt: string;
   initialContracts: Set<FlowContractRef>;
   stageEntries: readonly { canonical: CanonicalStage; id: string; title: string }[];
@@ -515,6 +517,7 @@ function frameSchematic(schematic: FlowSchematic): SchematicFrame {
       },
       intent_prefixes: entry.intent_prefixes,
     },
+    axes: requireSchematicField(schematic.axes, 'axes', schematicId),
     startsAt: schematic.starts_at as unknown as string,
     initialContracts: new Set(schematic.initial_contracts),
     stageEntries: stageEntries.map((p) => ({
@@ -615,6 +618,7 @@ function compileForMode(
       },
       intent_prefixes: frame.entry.intent_prefixes,
     },
+    axes: frame.axes,
     entry_modes: [compiledEntryMode],
     stages,
     stage_path_policy: stagePathPolicy,
@@ -647,7 +651,7 @@ function composeStagePathRationale(
 
 export function compileSchematicToCompiledFlow(schematic: FlowSchematic): CompileResult {
   const frame = frameSchematic(schematic);
-  const entryModes = requireSchematicField(schematic.entry_modes, 'entry_modes', frame.schematicId);
+  const entryModes = schematic.entry_modes ?? entryModesForAxes(frame.schematicId, frame.axes);
 
   if (!schematicHasOverrides(schematic)) {
     // No mode-specific topology. Compile one graph and attach every entry mode

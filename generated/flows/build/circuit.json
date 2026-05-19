@@ -10,30 +10,41 @@
     },
     "intent_prefixes": ["build", "implement", "develop"]
   },
+  "axes": {
+    "allowed_rigors": ["lite", "standard", "deep"],
+    "supports_tournament": false,
+    "supports_autonomous": true,
+    "default": {
+      "rigor": "standard",
+      "tournament": false,
+      "tournament_n": 3,
+      "autonomous": false
+    }
+  },
   "entry_modes": [
     {
       "name": "default",
       "start_at": "frame-step",
       "depth": "standard",
-      "description": "Default Build entry mode."
+      "description": "Default build axis tuple."
     },
     {
       "name": "lite",
       "start_at": "frame-step",
       "depth": "lite",
-      "description": "Lite Build entry mode."
+      "description": "lite build axis tuple."
     },
     {
       "name": "deep",
       "start_at": "frame-step",
       "depth": "deep",
-      "description": "Deep Build entry mode."
+      "description": "deep build axis tuple."
     },
     {
       "name": "autonomous",
       "start_at": "frame-step",
       "depth": "autonomous",
-      "description": "Autonomous Build entry mode."
+      "description": "Autonomous build axis tuple."
     }
   ],
   "stages": [

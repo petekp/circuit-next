@@ -10,24 +10,35 @@
     },
     "intent_prefixes": ["fix", "diagnose"]
   },
+  "axes": {
+    "allowed_rigors": ["lite", "standard", "deep"],
+    "supports_tournament": false,
+    "supports_autonomous": true,
+    "default": {
+      "rigor": "standard",
+      "tournament": false,
+      "tournament_n": 3,
+      "autonomous": false
+    }
+  },
   "entry_modes": [
     {
       "name": "default",
       "start_at": "fix-frame",
       "depth": "standard",
-      "description": "Default Fix entry mode — standard depth with full review pass."
+      "description": "Default fix axis tuple."
     },
     {
       "name": "deep",
       "start_at": "fix-frame",
       "depth": "deep",
-      "description": "Deep Fix entry mode — standard graph at deep depth (more thorough analysis and review)."
+      "description": "deep fix axis tuple."
     },
     {
       "name": "autonomous",
       "start_at": "fix-frame",
       "depth": "autonomous",
-      "description": "Autonomous Fix entry mode — standard graph at autonomous depth; safe-default checkpoint choices apply."
+      "description": "Autonomous fix axis tuple."
     }
   ],
   "stages": [

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FlowAxes } from './axes.js';
 import { ChangeKind } from './change-kind.js';
 import { Depth } from './depth.js';
 import { CompiledFlowId, StepId } from './ids.js';
@@ -36,6 +37,7 @@ const CompiledFlowBody = z
         intent_prefixes: z.array(z.string()).default([]),
       })
       .strict(),
+    axes: FlowAxes.optional(),
     entry_modes: z.array(EntryMode).min(1),
     stages: z.array(Stage).min(1),
     stage_path_policy: SpinePolicy,
