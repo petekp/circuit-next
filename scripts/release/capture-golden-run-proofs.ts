@@ -642,6 +642,26 @@ function exploreDecisionRelayer(): Relayer {
   };
 }
 
+function exploreAutonomousDecisionRelayer(): Relayer {
+  const base = exploreDecisionRelayer();
+  return {
+    connectorName: base.connectorName,
+    relay: async (input: RelayInput): Promise<RelayOutcome> => {
+      const result = await base.relay(input);
+      const resultBody = JSON.parse(result.result_body) as Record<string, unknown>;
+      if (resultBody.option_id !== 'option-1') return result;
+      return {
+        ...result,
+        receipt_id: 'proof-autonomous-proposal-option-1',
+        result_body: JSON.stringify({
+          ...resultBody,
+          evidence_refs: [],
+        }),
+      };
+    },
+  };
+}
+
 type Scenario = {
   slug: string;
   argv: readonly string[];
@@ -945,6 +965,22 @@ const scenarios: Scenario[] = [
     resumeChoice: 'option-2',
     runId: '44444444-4444-4444-4444-444444444441',
     startMs: Date.UTC(2026, 3, 29, 17, 0, 0),
+  },
+  {
+    slug: 'explore-autonomous-decision',
+    argv: [
+      'run',
+      'explore',
+      '--goal',
+      'decide: React vs Vue',
+      '--tournament',
+      '--tournament-n',
+      '2',
+      '--autonomous',
+    ],
+    relayer: exploreAutonomousDecisionRelayer(),
+    runId: '44444444-4444-4444-4444-444444444442',
+    startMs: Date.UTC(2026, 3, 29, 17, 30, 0),
   },
   {
     slug: 'plan-execution',

@@ -222,6 +222,25 @@ function tournamentRelayer(): RelayFn {
   };
 }
 
+function runtimeVetoedTournamentRelayer(): RelayFn {
+  const base = tournamentRelayer();
+  return {
+    connectorName: base.connectorName,
+    relay: async (input) => {
+      const result = await base.relay(input);
+      const resultBody = JSON.parse(result.result_body) as Record<string, unknown>;
+      if (resultBody.option_id !== 'option-1') return result;
+      return {
+        ...result,
+        result_body: JSON.stringify({
+          ...resultBody,
+          evidence_refs: [],
+        }),
+      };
+    },
+  };
+}
+
 function pursueCliRelayer(): RelayFn {
   return {
     connectorName: 'claude-code',
@@ -1315,6 +1334,95 @@ describe('CLI router', () => {
       resolved_value: 'option-1',
       tie_break: 'original_ordinal',
     });
+  });
+
+  it('runs autonomous tournament end-to-end with a highest-score auto-resolution', async () => {
+    const runFolder = join(runFolderBase, 'explore-autonomous-tournament-winner');
+    const output = await runMainJsonWithRelayer(
+      [
+        'explore',
+        '--goal',
+        'decide: React vs Vue',
+        '--tournament',
+        '--tournament-n',
+        '2',
+        '--autonomous',
+        '--run-folder',
+        runFolder,
+      ],
+      runtimeVetoedTournamentRelayer(),
+    );
+
+    expect(output).toMatchObject({
+      flow_id: 'explore',
+      entry_mode: 'autonomous',
+      outcome: 'complete',
+    });
+
+    const response = JSON.parse(
+      readFileSync(join(runFolder, 'reports/checkpoints/tradeoff-response.json'), 'utf8'),
+    ) as {
+      selection: string;
+      auto_resolution: {
+        resolved_value: string;
+        alternatives_available: string[];
+        scores: Record<string, { aggregate_score: number; runtime_veto_count: number }>;
+        rubric_results: Record<
+          string,
+          {
+            aggregate_score: number;
+            dims: Record<string, { runtime_signal: string; runtime_vetoed: boolean }>;
+          }
+        >;
+        runtime_veto_effect: string;
+      };
+    };
+    expect(response.selection).toBe('option-2');
+    expect(response.auto_resolution).toMatchObject({
+      resolved_value: 'option-2',
+      alternatives_available: ['option-1'],
+      scores: {
+        'option-1': { aggregate_score: 0.875, runtime_veto_count: 1 },
+        'option-2': { aggregate_score: 1, runtime_veto_count: 0 },
+      },
+      runtime_veto_effect:
+        'option-1 evidence_rigor runtime_signal=missing forced final_score=fail and dim_score=0',
+    });
+    expect(response.auto_resolution.rubric_results['option-1']?.dims.evidence_rigor).toMatchObject({
+      runtime_signal: 'missing',
+      runtime_vetoed: true,
+    });
+
+    const decision = JSON.parse(readFileSync(join(runFolder, 'reports/decision.json'), 'utf8')) as {
+      selected_option_id: string;
+      selected_option_label: string;
+    };
+    expect(decision).toMatchObject({
+      selected_option_id: 'option-2',
+      selected_option_label: 'Vue',
+    });
+
+    const result = JSON.parse(
+      readFileSync(join(runFolder, 'reports/explore-result.json'), 'utf8'),
+    ) as { verdict_snapshot: { selected_option_id: string } };
+    expect(result.verdict_snapshot.selected_option_id).toBe('option-2');
+
+    const summary = JSON.parse(readFileSync(output.operator_summary_path as string, 'utf8')) as {
+      auto_resolutions: Array<{
+        resolved_value: string;
+        rubric_results: typeof response.auto_resolution.rubric_results;
+        runtime_veto_effect: string;
+      }>;
+    };
+    expect(summary.auto_resolutions[0]).toMatchObject({
+      resolved_value: 'option-2',
+      runtime_veto_effect: response.auto_resolution.runtime_veto_effect,
+    });
+    expect(summary.auto_resolutions[0]?.rubric_results['option-1']?.aggregate_score).toBe(0.875);
+
+    const markdown = readFileSync(output.operator_summary_markdown_path as string, 'utf8');
+    expect(markdown).toContain('Auto-resolutions');
+    expect(markdown).toContain('option-2 selected by policy `highest-score`');
   });
 
   it('accepts the lower tournament N bound', async () => {
