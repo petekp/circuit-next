@@ -603,7 +603,7 @@ async function captureHandoff(): Promise<void> {
         'build',
         '--goal',
         'deep change that asks for handoff continuity',
-        '--entry-mode',
+        '--rigor',
         'deep',
         '--run-folder',
         runFolder,
@@ -735,7 +735,7 @@ const scenarios: Scenario[] = [
   },
   {
     slug: 'explicit-build',
-    argv: ['run', 'build', '--goal', 'add a focused change', '--entry-mode', 'deep'],
+    argv: ['run', 'build', '--goal', 'add a focused change', '--rigor', 'deep'],
     relayer: buildRelayer(),
     runId: '44444444-4444-4444-4444-444444444403',
     startMs: Date.UTC(2026, 3, 29, 18, 30, 0),
@@ -749,7 +749,7 @@ const scenarios: Scenario[] = [
   },
   {
     slug: 'checkpoint',
-    argv: ['run', 'build', '--goal', 'deep change that asks for scope', '--entry-mode', 'deep'],
+    argv: ['run', 'build', '--goal', 'deep change that asks for scope', '--rigor', 'deep'],
     relayer: buildRelayer(),
     resumeChoice: 'continue',
     runId: '44444444-4444-4444-4444-444444444405',

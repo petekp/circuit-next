@@ -8,8 +8,8 @@ import { isRuntimeRunFolder, resumeCompiledFlow } from '../runtime/run/checkpoin
 import type { ChildCompiledFlowResolver } from '../runtime/run/child-runner.js';
 import { runCompiledFlowWithWaiting } from '../runtime/run/compiled-flow-runner.js';
 import { isGraphCheckpointWaitingResult } from '../runtime/run/graph-runner.js';
+import { Axes, type Axes as AxesValue, TournamentN } from '../schemas/axes.js';
 import { CompiledFlow } from '../schemas/compiled-flow.js';
-import { Depth } from '../schemas/depth.js';
 import { CompiledFlowId, RunId } from '../schemas/ids.js';
 import { computeManifestHash } from '../schemas/manifest.js';
 import {
@@ -17,6 +17,7 @@ import {
   type ProgressEvent as ProgressEventValue,
 } from '../schemas/progress-event.js';
 import { RunResult } from '../schemas/result.js';
+import { Rigor, type Rigor as RigorValue } from '../schemas/rigor.js';
 
 import { classifyCompiledFlowTask } from '../flows/router.js';
 import { findFlowRuntimeSurfaceById } from '../flows/runtime-surface.js';
@@ -46,7 +47,8 @@ import {
 // stage-set policy, composes the runtime boundary via the runner, and
 // prints the <run-folder> path on success.
 //
-// Invocation-layer flags stay narrow (--goal, --depth, --run-folder,
+// Invocation-layer flags stay narrow (--goal, --rigor, --tournament,
+// --tournament-n, --autonomous, --run-folder,
 // --fixture, --flow-root). The product path discovers user-global and
 // project config files and supplies them as LayeredConfigs to the
 // selection resolver.
@@ -62,9 +64,11 @@ interface ParsedArgs {
   command?: 'run' | 'resume';
   flowName?: string;
   goal?: string;
-  depth?: Depth;
-  depthProvided: boolean;
-  entryMode?: string;
+  axes: AxesValue;
+  rigorProvided: boolean;
+  tournamentProvided: boolean;
+  tournamentNProvided: boolean;
+  autonomousProvided: boolean;
   runFolder?: string;
   fixturePath?: string;
   flowRoot?: string;
@@ -88,6 +92,12 @@ interface ResolvedEntryModeSelection {
   reason?: string;
 }
 
+interface AxisSupport {
+  allowedRigors: readonly RigorValue[];
+  supportsTournament: boolean;
+  supportsAutonomous: boolean;
+}
+
 export interface CliMainOptions {
   relayer?: RelayFn;
   composeWriter?: ComposeWriterFn;
@@ -100,16 +110,14 @@ export interface CliMainOptions {
 
 export function usage(): string {
   return [
-    'usage: circuit-next run [flow-name] --goal "<goal>" [--mode <default|lite|deep|autonomous>] [--depth <lite|standard|deep|tournament|autonomous>] [--run-folder <path>] [--fixture <path>] [--flow-root <path>] [--progress jsonl]',
+    'usage: circuit-next run [flow-name] --goal "<goal>" [--rigor <lite|standard|deep>] [--tournament [--tournament-n <2|3|4>]] [--autonomous] [--run-folder <path>] [--fixture <path>] [--flow-root <path>] [--progress jsonl]',
     '       circuit-next resume --run-folder <path> --checkpoint-choice <choice> [--progress jsonl]',
     '       circuit-next runs show --run-folder <path> --json',
     '       circuit-next handoff [save|resume|done] [options]',
     '       circuit-next create --description "<flow idea>" [--name <slug>] [--publish --yes]',
     '       circuit-next version [--json]',
     '',
-    '`--mode` is the friendly alias for `--entry-mode`; supplying both forms of that option is an error.',
-    '',
-    '`--mode` and `--depth` name the same thoroughness level under two flag names. The aliases are: `default` <-> `standard`, `lite` <-> `lite`, `deep` <-> `deep`, `autonomous` <-> `autonomous`, `tournament` <-> `tournament`. Supply only one — the other is inferred. If you supply both, they must be the matching pair (e.g., `--mode deep --depth deep`); mismatched pairs like `--mode deep --depth standard` are rejected. Levels are gated per flow: every flow supports `default/standard` (the default if you supply neither). Other levels vary per flow — Build and Fix support `lite`, `deep`, and `autonomous`; Pursue supports `default` and `autonomous`; Review supports only `default`; Explore adds `tournament`. If a flow does not support a given level the rejection lists the supported levels.',
+    'Axes: `--rigor` controls care level (`lite`, `standard`, `deep`); `--tournament` turns on option fan-out; `--tournament-n` sets the option count in the v1 range [2, 4]; `--autonomous` asks the flow to auto-resolve supported checkpoints. Unsupported tuples are rejected per flow with the flow allow-list.',
     '',
     'With an explicit flow name, loads generated/flows/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review/fix/build/pursue flows and then composes the runtime boundary using the configured relay connector.',
     '',
@@ -180,9 +188,14 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   let flowName: string | undefined;
   let command: 'run' | 'resume' | undefined;
   let goal: string | undefined;
-  let depth: Depth | undefined;
-  let depthProvided = false;
-  let entryMode: string | undefined;
+  let rigor: RigorValue | undefined;
+  let rigorProvided = false;
+  let tournament = false;
+  let tournamentProvided = false;
+  let tournamentN: number | undefined;
+  let tournamentNProvided = false;
+  let autonomous = false;
+  let autonomousProvided = false;
   let runFolder: string | undefined;
   let fixturePath: string | undefined;
   let flowRoot: string | undefined;
@@ -200,26 +213,46 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       i += 1;
       continue;
     }
-    if (tok === '--depth') {
+    if (tok === '--rigor') {
       const next = argv[i + 1];
       if (next === undefined) throw new Error(`${tok} requires a value`);
-      if (depthProvided) {
-        throw new Error('supply --depth only once');
+      if (rigorProvided) {
+        throw new Error('supply --rigor only once');
       }
-      depth = Depth.parse(next);
-      depthProvided = true;
+      rigor = Rigor.parse(next);
+      rigorProvided = true;
       i += 1;
       continue;
     }
-    if (tok === '--entry-mode' || tok === '--mode') {
+    if (tok === '--tournament') {
+      if (tournamentProvided) {
+        throw new Error('supply --tournament only once');
+      }
+      tournament = true;
+      tournamentProvided = true;
+      continue;
+    }
+    if (tok === '--tournament-n') {
       const next = argv[i + 1];
       if (next === undefined) throw new Error(`${tok} requires a value`);
-      if (next.length === 0) throw new Error(`${tok} requires a non-empty value`);
-      if (entryMode !== undefined) {
-        throw new Error('use either --mode or --entry-mode, not both');
+      if (tournamentNProvided) {
+        throw new Error('supply --tournament-n only once');
       }
-      entryMode = next;
+      const parsed = Number(next);
+      if (!Number.isInteger(parsed) || !TournamentN.safeParse(parsed).success) {
+        throw new Error('Tournament N must be between 2 and 4');
+      }
+      tournamentN = parsed;
+      tournamentNProvided = true;
       i += 1;
+      continue;
+    }
+    if (tok === '--autonomous') {
+      if (autonomousProvided) {
+        throw new Error('supply --autonomous only once');
+      }
+      autonomous = true;
+      autonomousProvided = true;
       continue;
     }
     if (tok === '--run-folder') {
@@ -315,11 +348,10 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     if (flowRoot !== undefined) {
       throw new Error('checkpoint resume loads the saved flow manifest; omit --flow-root');
     }
-    if (depthProvided) {
-      throw new Error('checkpoint resume reuses the saved run depth; omit --depth');
-    }
-    if (entryMode !== undefined) {
-      throw new Error('checkpoint resume reuses the saved flow position; omit --mode/--entry-mode');
+    if (rigorProvided || tournamentProvided || tournamentNProvided || autonomousProvided) {
+      throw new Error(
+        'checkpoint resume reuses the saved run axes; omit --rigor/--tournament/--tournament-n/--autonomous',
+      );
     }
     if (includeUntrackedContent) {
       throw new Error(
@@ -330,12 +362,25 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     throw new Error('--goal is required and must be non-empty');
   }
 
+  if (tournamentNProvided && !tournamentProvided) {
+    throw new Error('--tournament-n requires --tournament');
+  }
+
+  const axes = Axes.parse({
+    ...(rigor === undefined ? {} : { rigor }),
+    tournament,
+    ...(tournamentN === undefined ? {} : { tournament_n: tournamentN }),
+    autonomous,
+  });
+
   const result: ParsedArgs = {
-    depthProvided,
+    axes,
+    rigorProvided,
+    tournamentProvided,
+    tournamentNProvided,
+    autonomousProvided,
     includeUntrackedContent,
   };
-  if (depth !== undefined) result.depth = depth;
-  if (entryMode !== undefined) result.entryMode = entryMode;
   if (command !== undefined) result.command = command;
   if (goal !== undefined) result.goal = goal;
   if (flowName !== undefined) result.flowName = flowName;
@@ -394,53 +439,53 @@ function resolveCompiledFlowRoute(args: ParsedArgs): ResolvedCompiledFlowRoute {
   return classifyCompiledFlowTask(args.goal);
 }
 
-// Pair `--depth` with its conventional entry mode when `--mode` is omitted.
-// Flow runtime surfaces use 1:1 (mode, depth) pairs except for the
-// `default/standard` baseline, so `--depth lite` unambiguously means
-// `--mode lite`. Without this inference an operator who types only
-// `--depth deep` falls into the `default` entry mode at depth `deep`, which
-// no flow supports — a confusing rejection for what looks like a single
-// reasonable flag.
-function entryModeForDepth(depth: string): string {
-  if (depth === 'standard') return 'default';
-  return depth;
+function hasExplicitAxes(args: ParsedArgs): boolean {
+  return args.rigorProvided || args.tournamentProvided || args.autonomousProvided;
 }
 
-function depthForEntryMode(mode: string): string {
-  if (mode === 'default') return 'standard';
-  return mode;
+function legacyEntryModeNameForAxes(axes: AxesValue): string {
+  if (axes.autonomous) return 'autonomous';
+  if (axes.tournament) return 'tournament';
+  if (axes.rigor === 'lite' || axes.rigor === 'deep') return axes.rigor;
+  return 'default';
 }
 
-// `--mode` and `--depth` name the same thoroughness level under two flag
-// names. When the operator supplies both flags, they must
-// refer to the same level; otherwise we reject at parse time with the
-// matching pair for each side so the operator can immediately pick one.
-function validateModeDepthAliasConsistency(args: ParsedArgs): void {
-  if (args.entryMode === undefined || !args.depthProvided || args.depth === undefined) return;
-  const expectedDepth = depthForEntryMode(args.entryMode);
-  if (expectedDepth === args.depth) return;
-  const expectedMode = entryModeForDepth(args.depth);
-  throw new Error(
-    `--mode ${args.entryMode} and --depth ${args.depth} name different thoroughness levels. --mode ${args.entryMode} implies --depth ${expectedDepth}; --depth ${args.depth} implies --mode ${expectedMode}. Supply one consistent pair, or supply only one of --mode/--depth.`,
-  );
+function legacyRuntimeDepthForAxes(axes: AxesValue): string {
+  if (axes.autonomous) return 'autonomous';
+  if (axes.tournament) return 'tournament';
+  return axes.rigor;
+}
+
+function axesForLegacyEntryModeName(entryModeName: string): AxesValue {
+  if (entryModeName === 'lite' || entryModeName === 'deep') {
+    return Axes.parse({ rigor: entryModeName });
+  }
+  if (entryModeName === 'tournament') {
+    return Axes.parse({ tournament: true });
+  }
+  if (entryModeName === 'autonomous') {
+    return Axes.parse({ autonomous: true });
+  }
+  return Axes.parse({});
+}
+
+function selectedAxes(args: ParsedArgs, route: ResolvedCompiledFlowRoute): AxesValue {
+  if (hasExplicitAxes(args)) return args.axes;
+  if (route.inferredEntryModeName !== undefined) {
+    return axesForLegacyEntryModeName(route.inferredEntryModeName);
+  }
+  return args.axes;
 }
 
 function resolveEntryModeSelection(
   args: ParsedArgs,
   route: ResolvedCompiledFlowRoute,
 ): ResolvedEntryModeSelection {
-  if (args.entryMode !== undefined) {
+  if (hasExplicitAxes(args)) {
     return {
-      entryModeName: args.entryMode,
+      entryModeName: legacyEntryModeNameForAxes(args.axes),
       source: 'explicit',
-      reason: 'explicit --mode/--entry-mode argument',
-    };
-  }
-  if (args.depthProvided && args.depth !== undefined) {
-    return {
-      entryModeName: entryModeForDepth(args.depth),
-      source: 'explicit',
-      reason: `inferred from --depth ${args.depth}`,
+      reason: 'explicit axis flags',
     };
   }
   if (route.inferredEntryModeName !== undefined) {
@@ -463,15 +508,92 @@ function progressSurfaceForFlowId(flowId: string) {
   return findFlowRuntimeSurfaceById(flowId)?.progress;
 }
 
-function validateFlowDepth(args: ParsedArgs, route: ResolvedCompiledFlowRoute): void {
-  if (!args.depthProvided || args.depth === undefined) return;
-  const rows = runtimeSupportRowsForFlow(route.flowName);
-  if (rows === undefined) return;
-  if (rows.some((row) => row.depth === args.depth)) return;
-  const allowedDepths = Array.from(new Set(rows.map((row) => row.depth))).join(', ');
-  throw new Error(
-    `--depth ${args.depth} is not supported by flow '${route.flowName}'. ${route.flowName} supports depths: ${allowedDepths}`,
-  );
+function axisSupportFromRows(
+  rows: readonly { readonly entryModeName: string; readonly depth: string }[],
+): AxisSupport {
+  const allowedRigors = new Set<RigorValue>();
+  let supportsTournament = false;
+  let supportsAutonomous = false;
+  for (const row of rows) {
+    const rigor = Rigor.safeParse(row.depth);
+    if (rigor.success) allowedRigors.add(rigor.data);
+    if (row.depth === 'tournament' || row.entryModeName === 'tournament') {
+      supportsTournament = true;
+    }
+    if (row.depth === 'autonomous' || row.entryModeName === 'autonomous') {
+      supportsAutonomous = true;
+    }
+  }
+  return {
+    allowedRigors: Array.from(allowedRigors),
+    supportsTournament,
+    supportsAutonomous,
+  };
+}
+
+function axisSupportFromFlow(input: {
+  readonly flow: CompiledFlow;
+  readonly args?: ParsedArgs;
+  readonly fixturePath?: string;
+}): AxisSupport {
+  const flowId = input.flow.id as unknown as string;
+  const customArchetype =
+    input.args === undefined || input.fixturePath === undefined
+      ? undefined
+      : customFlowArchetype({
+          flow: input.flow,
+          args: input.args,
+          fixturePath: input.fixturePath,
+        });
+  const directRows = runtimeSupportRowsForFlow(flowId);
+  const customArchetypeRows =
+    customArchetype === undefined ? undefined : runtimeSupportRowsForFlow(customArchetype);
+  const rows =
+    directRows ??
+    customArchetypeRows ??
+    input.flow.entry_modes.map((mode) => ({ entryModeName: mode.name, depth: mode.depth }));
+  return axisSupportFromRows(rows);
+}
+
+function axisAllowListText(flowId: string, support: AxisSupport): string {
+  const rigors = support.allowedRigors.join(', ');
+  return `${flowId} allows rigors: ${rigors}; tournament: ${support.supportsTournament ? 'yes' : 'no'}; autonomous: ${support.supportsAutonomous ? 'yes' : 'no'}`;
+}
+
+function validateFlowAxes(input: {
+  readonly flow: CompiledFlow;
+  readonly args: ParsedArgs;
+  readonly route: ResolvedCompiledFlowRoute;
+  readonly fixturePath: string;
+}): void {
+  const axes = selectedAxes(input.args, input.route);
+  const support = axisSupportFromFlow(input);
+  const flowId = input.flow.id as unknown as string;
+  const allowList = axisAllowListText(flowId, support);
+  if (!support.allowedRigors.includes(axes.rigor)) {
+    throw new Error(`--rigor ${axes.rigor} is not supported by flow '${flowId}'. ${allowList}`);
+  }
+  if (axes.tournament && !support.supportsTournament) {
+    throw new Error(`--tournament is not supported by flow '${flowId}'. ${allowList}`);
+  }
+  if (axes.autonomous && !support.supportsAutonomous) {
+    throw new Error(`--autonomous is not supported by flow '${flowId}'. ${allowList}`);
+  }
+}
+
+function validateAutonomousCheckpointPolicies(input: {
+  readonly flow: CompiledFlow;
+}): void {
+  const support = axisSupportFromFlow(input);
+  if (!support.supportsAutonomous) return;
+  for (const step of input.flow.steps) {
+    if (step.kind !== 'checkpoint') continue;
+    const autoResolution = step.policy.auto_resolution;
+    if (autoResolution?.policy !== 'refuse') continue;
+    throw new Error(
+      `flow fixture '${input.flow.id}' supports autonomous but checkpoint '${step.id}' declares auto_resolution policy 'refuse'`,
+    );
+  }
 }
 
 function loadFixture(fixturePath: string): { flow: CompiledFlow; bytes: Buffer } {
@@ -487,6 +609,7 @@ function loadFixture(fixturePath: string): { flow: CompiledFlow; bytes: Buffer }
   if (!policy.ok) {
     throw new Error(`flow fixture policy violation (${fixturePath}):\n  ${policy.reason}`);
   }
+  validateAutonomousCheckpointPolicies({ flow });
   return { flow, bytes };
 }
 
@@ -536,9 +659,12 @@ function selectedEntryModeName(
 function selectedDepth(
   flow: CompiledFlow,
   args: ParsedArgs,
+  route: ResolvedCompiledFlowRoute,
   entryModeSelection: ResolvedEntryModeSelection,
 ): string {
-  if (args.depth !== undefined) return args.depth;
+  if (hasExplicitAxes(args)) return legacyRuntimeDepthForAxes(args.axes);
+  if (route.inferredEntryModeName !== undefined)
+    return legacyRuntimeDepthForAxes(selectedAxes(args, route));
   return selectedEntryMode(flow, entryModeSelection).depth;
 }
 
@@ -576,12 +702,13 @@ function customFlowArchetype(input: {
 function classifyRuntimeSupport(input: {
   readonly flow: CompiledFlow;
   readonly args: ParsedArgs;
+  readonly route: ResolvedCompiledFlowRoute;
   readonly entryModeSelection: ResolvedEntryModeSelection;
   readonly fixturePath: string;
 }): RuntimeSupportDecision {
   const flowId = input.flow.id as unknown as string;
   const entryModeName = selectedEntryModeName(input.flow, input.entryModeSelection);
-  const depth = selectedDepth(input.flow, input.args, input.entryModeSelection);
+  const depth = selectedDepth(input.flow, input.args, input.route, input.entryModeSelection);
   const customArchetype = customFlowArchetype({
     flow: input.flow,
     args: input.args,
@@ -738,13 +865,6 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
   }
 
   const route = resolveCompiledFlowRoute(args);
-  try {
-    validateModeDepthAliasConsistency(args);
-    validateFlowDepth(args, route);
-  } catch (err) {
-    process.stderr.write(`error: ${(err as Error).message}\n`);
-    return 2;
-  }
   const entryModeSelection = resolveEntryModeSelection(args, route);
   const fixturePath = resolveFixturePath(
     route.flowName,
@@ -754,6 +874,12 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
   );
   const { flow, bytes } = loadFixture(fixturePath);
   assertFixtureMatchesRoute(flow, route);
+  try {
+    validateFlowAxes({ flow, args, route, fixturePath });
+  } catch (err) {
+    process.stderr.write(`error: ${(err as Error).message}\n`);
+    return 2;
+  }
   const runId = RunId.parse(options.runId ?? randomUUID());
   const now = options.now ?? (() => new Date());
   const progress = progressReporter(args.progress === 'jsonl');
@@ -786,7 +912,13 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
 
   const projectRoot = resolve(options.configCwd ?? process.cwd());
 
-  const runtimeSupport = classifyRuntimeSupport({ flow, args, entryModeSelection, fixturePath });
+  const runtimeSupport = classifyRuntimeSupport({
+    flow,
+    args,
+    route,
+    entryModeSelection,
+    fixturePath,
+  });
   const runtimeDecisionDiagnostics = showRuntimeDecision();
   const defaultRuntimeSupport = applyComposeWriterPolicy(
     applyFixturePolicy(runtimeSupport, {
@@ -807,7 +939,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
       now,
       projectRoot,
       childCompiledFlowResolver: defaultChildCompiledFlowResolver(args.flowRoot),
-      ...(args.depth === undefined ? {} : { depth: args.depth }),
+      ...(hasExplicitAxes(args) ? { depth: legacyRuntimeDepthForAxes(args.axes) } : {}),
       ...(entryModeSelection.entryModeName === undefined
         ? {}
         : { entryModeName: entryModeSelection.entryModeName }),

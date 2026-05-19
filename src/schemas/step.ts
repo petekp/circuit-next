@@ -65,6 +65,13 @@ export const VerificationStep = StepBase.extend({
 }).strict();
 export type VerificationStep = z.infer<typeof VerificationStep>;
 
+export const AutoResolutionPolicy = z
+  .object({
+    policy: z.enum(['accept-as-is', 'highest-score', 'first-acceptable', 'refuse']),
+  })
+  .passthrough();
+export type AutoResolutionPolicy = z.infer<typeof AutoResolutionPolicy>;
+
 export const CheckpointPolicy = z
   .object({
     prompt: z.string().min(1),
@@ -81,6 +88,7 @@ export const CheckpointPolicy = z
       .min(1),
     safe_default_choice: z.string().min(1).optional(),
     safe_autonomous_choice: z.string().min(1).optional(),
+    auto_resolution: AutoResolutionPolicy.optional(),
     report_template: JsonObject.optional(),
   })
   .strict()

@@ -789,7 +789,7 @@ describe('CLI router', () => {
       [
         '--goal',
         'develop: add a focused feature that waits for framing',
-        '--entry-mode',
+        '--rigor',
         'deep',
         '--run-folder',
         runFolder,
@@ -820,7 +820,7 @@ describe('CLI router', () => {
       [
         '--goal',
         'develop: add a focused feature that waits for framing',
-        '--entry-mode',
+        '--rigor',
         'deep',
         '--progress',
         'jsonl',
@@ -1081,7 +1081,7 @@ describe('CLI router', () => {
     });
   });
 
-  it('lets explicit --mode override classifier-inferred Fix mode', async () => {
+  it('lets explicit --rigor override classifier-inferred Fix mode', async () => {
     const runFolder = join(runFolderBase, 'fix-explicit-default-mode');
 
     const output = await withStrictruntime(() =>
@@ -1089,8 +1089,8 @@ describe('CLI router', () => {
         [
           '--goal',
           'fix: restore the missing token regression test',
-          '--mode',
-          'default',
+          '--rigor',
+          'standard',
           '--run-folder',
           runFolder,
         ],
@@ -1107,14 +1107,14 @@ describe('CLI router', () => {
     expect(bootstrap).toMatchObject({ depth: 'standard' });
   });
 
-  it('infers the matching entry mode from --depth when --mode is omitted (F-M-1)', async () => {
+  it('uses --rigor to select the matching legacy entry mode during migration', async () => {
     const runFolder = join(runFolderBase, 'fix-depth-only');
 
     const output = await runMainJson(
       [
         '--goal',
         'fix: restore the missing token regression test',
-        '--depth',
+        '--rigor',
         'deep',
         '--run-folder',
         runFolder,
@@ -1131,26 +1131,25 @@ describe('CLI router', () => {
     expect(bootstrap).toMatchObject({ depth: 'deep' });
   });
 
-  it('rejects --depth values not in the per-flow allowlist before route selection (F-M-2)', async () => {
+  it('rejects tournament on flows whose axis allow-list does not support it', async () => {
     const runFolder = join(runFolderBase, 'fix-depth-tournament');
 
     const result = await runMainExit([
       'fix',
       '--goal',
       'fix: a regression bug',
-      '--depth',
-      'tournament',
+      '--tournament',
       '--run-folder',
       runFolder,
     ]);
 
     expect(result.exit).toBe(2);
-    expect(result.stderr).toContain("--depth tournament is not supported by flow 'fix'");
-    expect(result.stderr).toContain('fix supports depths:');
+    expect(result.stderr).toContain("--tournament is not supported by flow 'fix'");
+    expect(result.stderr).toContain('fix allows rigors:');
     expect(existsSync(runFolder)).toBe(false);
   });
 
-  it('accepts --entry-mode and uses that mode depth when --depth is omitted', async () => {
+  it('accepts --rigor lite and uses the legacy lite entry depth during migration', async () => {
     const runFolder = join(runFolderBase, 'build-lite-entry-mode');
     const projectRoot = createProofProject('build-lite-entry-mode-project');
     const output = await runMainJson(
@@ -1158,7 +1157,7 @@ describe('CLI router', () => {
         'build',
         '--goal',
         'Add a tiny Build feature from the CLI',
-        '--entry-mode',
+        '--rigor',
         'lite',
         '--run-folder',
         runFolder,
@@ -1179,70 +1178,155 @@ describe('CLI router', () => {
     expect(relayResolvedSelection).toMatchObject({ depth: 'lite' });
   }, 30_000);
 
-  it('rejects mismatched --entry-mode and --depth pairs at parse time with the consistent alias on each side', async () => {
-    const runFolder = join(runFolderBase, 'build-entry-mode-depth-override');
-    const result = await runMainExit([
-      'build',
-      '--goal',
-      'Add a tiny Build feature from the CLI with an override',
-      '--entry-mode',
-      'deep',
-      '--depth',
-      'standard',
-      '--run-folder',
-      runFolder,
-    ]);
-
-    expect(result.exit).toBe(2);
-    expect(result.stderr).toContain(
-      'error: --mode deep and --depth standard name different thoroughness levels.',
+  it('accepts --autonomous and uses the legacy autonomous entry during migration', async () => {
+    const runFolder = join(runFolderBase, 'build-autonomous-axis');
+    const projectRoot = createProofProject('build-autonomous-axis-project');
+    const output = await runMainJson(
+      [
+        'build',
+        '--goal',
+        'Add a tiny Build feature from the CLI with autonomous checkpoints',
+        '--autonomous',
+        '--run-folder',
+        runFolder,
+      ],
+      '{"verdict":"accept"}',
+      { configCwd: projectRoot },
     );
-    expect(result.stderr).toContain('--mode deep implies --depth deep');
-    expect(result.stderr).toContain('--depth standard implies --mode default');
-    expect(existsSync(runFolder)).toBe(false);
+
+    const bootstrap = traceEntryLog(runFolder).find(
+      (trace_entry) => trace_entry.kind === 'run.bootstrapped',
+    );
+    expect(output.flow_id).toBe('build');
+    expect(output.entry_mode).toBe('autonomous');
+    expect(output.entry_mode_source).toBe('explicit');
+    expect(bootstrap).toMatchObject({ depth: 'autonomous' });
+  }, 30_000);
+
+  it('rejects autonomous-capable fixtures that declare a refuse checkpoint policy', async () => {
+    const fixturePath = join(runFolderBase, 'build-refuse-fixture.json');
+    const raw = JSON.parse(readFileSync('generated/flows/build/circuit.json', 'utf8')) as {
+      steps: Array<{
+        id: string;
+        kind: string;
+        policy?: Record<string, unknown>;
+      }>;
+    };
+    const frameStep = raw.steps.find((step) => step.id === 'frame-step');
+    if (frameStep === undefined || frameStep.policy === undefined) {
+      throw new Error('expected generated Build fixture to expose frame-step checkpoint policy');
+    }
+    frameStep.policy.auto_resolution = { policy: 'refuse' };
+    writeFileSync(fixturePath, `${JSON.stringify(raw, null, 2)}\n`);
+
+    await expect(
+      main(
+        [
+          'build',
+          '--goal',
+          'Try an invalid autonomous fixture',
+          '--fixture',
+          fixturePath,
+          '--autonomous',
+          '--run-folder',
+          join(runFolderBase, 'build-refuse-run'),
+        ],
+        {
+          relayer: relayerWithBody('{"verdict":"accept"}'),
+          now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
+          runId: '84000000-0000-0000-0000-000000000006',
+          configHomeDir: join(runFolderBase, 'empty-home'),
+          configCwd: join(runFolderBase, 'empty-cwd'),
+        },
+      ),
+    ).rejects.toThrow(/checkpoint 'frame-step'.*policy 'refuse'/);
   });
 
-  it('rejects mismatched default mode with autonomous depth before the run folder is written', async () => {
-    const runFolder = join(runFolderBase, 'build-default-entry-autonomous-override');
-    const result = await runMainExit([
-      'build',
-      '--goal',
-      'Add a tiny Build feature from the CLI with autonomous override',
-      '--entry-mode',
-      'default',
-      '--depth',
-      'autonomous',
-      '--run-folder',
-      runFolder,
-    ]);
-
-    expect(result.exit).toBe(2);
-    expect(result.stderr).toContain(
-      'error: --mode default and --depth autonomous name different thoroughness levels.',
+  it('accepts explicit tournament flags on Explore and validates N in range', async () => {
+    const runFolder = join(runFolderBase, 'explore-explicit-tournament-n4');
+    const output = await runMainJsonWithRelayer(
+      [
+        'explore',
+        '--goal',
+        'decide: React vs Vue',
+        '--tournament',
+        '--tournament-n',
+        '4',
+        '--run-folder',
+        runFolder,
+      ],
+      tournamentRelayer(),
     );
-    expect(existsSync(runFolder)).toBe(false);
+
+    expect(output.flow_id).toBe('explore');
+    expect(output.entry_mode).toBe('tournament');
+    expect(output.entry_mode_source).toBe('explicit');
+    expect(output.outcome).toBe('checkpoint_waiting');
   });
 
-  it('suggests both consistent pairs in the rejection so the operator can pick one and retry', async () => {
-    const runFolder = join(runFolderBase, 'build-entry-mode-depth-override-actionable');
+  it('accepts the lower tournament N bound', async () => {
+    const output = await runMainJsonWithRelayer(
+      [
+        'explore',
+        '--goal',
+        'decide: A vs B',
+        '--tournament',
+        '--tournament-n',
+        '2',
+        '--run-folder',
+        join(runFolderBase, 'explore-tournament-n2'),
+      ],
+      tournamentRelayer(),
+    );
+
+    expect(output.outcome).toBe('checkpoint_waiting');
+  });
+
+  it('accepts the default tournament N when omitted', async () => {
+    const output = await runMainJsonWithRelayer(
+      [
+        'explore',
+        '--goal',
+        'decide: A vs B',
+        '--tournament',
+        '--run-folder',
+        join(runFolderBase, 'explore-tournament-n3-default'),
+      ],
+      tournamentRelayer(),
+    );
+
+    expect(output.outcome).toBe('checkpoint_waiting');
+  });
+
+  it.each(['1', '5'])('rejects tournament N=%s outside the v1 range', async (n) => {
     const result = await runMainExit([
-      'build',
+      'explore',
       '--goal',
-      'Add a tiny Build feature from the CLI with an override',
-      '--entry-mode',
-      'deep',
-      '--depth',
-      'standard',
+      'decide: A vs B',
+      '--tournament',
+      '--tournament-n',
+      n,
       '--run-folder',
-      runFolder,
+      join(runFolderBase, `explore-tournament-n${n}`),
     ]);
 
     expect(result.exit).toBe(2);
-    expect(result.stderr).toContain('--mode deep implies --depth deep');
-    expect(result.stderr).toContain('--depth standard implies --mode default');
-    expect(result.stderr).toContain(
-      'Supply one consistent pair, or supply only one of --mode/--depth.',
-    );
+    expect(result.stderr).toContain('Tournament N must be between 2 and 4');
+  });
+
+  it('rejects --mode as an unknown flag', async () => {
+    const result = await runMainExit([
+      'build',
+      '--goal',
+      'Add a tiny Build feature from the CLI with an old flag',
+      '--mode',
+      'deep',
+      '--run-folder',
+      join(runFolderBase, 'old-mode-flag'),
+    ]);
+
+    expect(result.exit).toBe(2);
+    expect(result.stderr).toContain('unknown flag: --mode');
   });
 
   it('rejects fixture overrides whose flow id does not match the selected flow', async () => {
@@ -1267,28 +1351,20 @@ describe('CLI router', () => {
     ).rejects.toThrow(/flow fixture id mismatch/i);
   });
 
-  it('rejects an unknown --entry-mode before writing a run trace', async () => {
+  it('rejects --entry-mode as an unknown flag before writing a run trace', async () => {
     const runFolder = join(runFolderBase, 'unknown-build-entry-mode');
-    await expect(
-      main(
-        [
-          'build',
-          '--goal',
-          'Try a missing Build entry mode',
-          '--entry-mode',
-          'missing',
-          '--run-folder',
-          runFolder,
-        ],
-        {
-          relayer: relayerWithBody('{"verdict":"accept"}'),
-          now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
-          runId: '84000000-0000-0000-0000-000000000005',
-          configHomeDir: join(runFolderBase, 'empty-home'),
-          configCwd: join(runFolderBase, 'empty-cwd'),
-        },
-      ),
-    ).rejects.toThrow(/entry_mode named 'missing'/);
+    const result = await runMainExit([
+      'build',
+      '--goal',
+      'Try a missing Build entry mode',
+      '--entry-mode',
+      'missing',
+      '--run-folder',
+      runFolder,
+    ]);
+
+    expect(result.exit).toBe(2);
+    expect(result.stderr).toContain('unknown flag: --entry-mode');
     expect(() => traceEntryLog(runFolder)).toThrow();
   });
 
@@ -1296,7 +1372,7 @@ describe('CLI router', () => {
     const runFolder = join(runFolderBase, 'checkpoint-waiting');
     const projectRoot = createProofProject('checkpoint-waiting-project');
     const output = await runMainJson(
-      ['build', '--goal', 'Frame via CLI', '--entry-mode', 'deep', '--run-folder', runFolder],
+      ['build', '--goal', 'Frame via CLI', '--rigor', 'deep', '--run-folder', runFolder],
       '{"verdict":"accept"}',
       { configCwd: projectRoot },
     );
@@ -1333,17 +1409,17 @@ describe('CLI router', () => {
   });
 
   it('rejects resume-only incompatible flags', async () => {
-    const withDepth = await runMainExit([
+    const withRigor = await runMainExit([
       'resume',
       '--run-folder',
       join(runFolderBase, 'not-needed'),
       '--checkpoint-choice',
       'continue',
-      '--depth',
+      '--rigor',
       'deep',
     ]);
-    expect(withDepth.exit).toBe(2);
-    expect(withDepth.stderr).toMatch(/omit --depth/);
+    expect(withRigor.exit).toBe(2);
+    expect(withRigor.stderr).toMatch(/omit --rigor\/--tournament\/--tournament-n\/--autonomous/);
 
     const withFixture = await runMainExit([
       'resume',
@@ -1357,20 +1433,21 @@ describe('CLI router', () => {
     expect(withFixture.exit).toBe(2);
     expect(withFixture.stderr).toMatch(/omit --fixture/);
 
-    const withEntryMode = await runMainExit([
+    const withAutonomous = await runMainExit([
       'resume',
       '--run-folder',
       join(runFolderBase, 'not-needed'),
       '--checkpoint-choice',
       'continue',
-      '--entry-mode',
-      'lite',
+      '--autonomous',
     ]);
-    expect(withEntryMode.exit).toBe(2);
-    expect(withEntryMode.stderr).toMatch(/omit --mode\/--entry-mode/);
+    expect(withAutonomous.exit).toBe(2);
+    expect(withAutonomous.stderr).toMatch(
+      /omit --rigor\/--tournament\/--tournament-n\/--autonomous/,
+    );
   });
 
-  it('rejects --depth on checkpoint resume', async () => {
+  it('rejects old --depth as an unknown flag', async () => {
     const withDepth = await runMainExit([
       'resume',
       '--run-folder',
@@ -1381,10 +1458,10 @@ describe('CLI router', () => {
       'deep',
     ]);
     expect(withDepth.exit).toBe(2);
-    expect(withDepth.stderr).toMatch(/omit --depth/);
+    expect(withDepth.stderr).toMatch(/unknown flag: --depth/);
   });
 
-  it('accepts --mode as a synonym for --entry-mode', async () => {
+  it('rejects old --mode as an unknown flag on resume too', async () => {
     const withMode = await runMainExit([
       'resume',
       '--run-folder',
@@ -1395,12 +1472,12 @@ describe('CLI router', () => {
       'lite',
     ]);
     expect(withMode.exit).toBe(2);
-    expect(withMode.stderr).toMatch(/omit --mode\/--entry-mode/);
+    expect(withMode.stderr).toMatch(/unknown flag: --mode/);
   });
 
-  it('parses --run-folder before rejecting resume-only --depth', async () => {
+  it('parses --run-folder before rejecting resume-only --rigor', async () => {
     // Resume validates other flags after argv parsing; pairing --run-folder
-    // with --depth exercises the downstream "omit --depth" branch. The
+    // with --rigor exercises the downstream axis-omit branch. The
     // branch firing proves --run-folder parsed and populated the run-folder slot.
     const result = await runMainExit([
       'resume',
@@ -1408,43 +1485,41 @@ describe('CLI router', () => {
       join(runFolderBase, 'not-needed'),
       '--checkpoint-choice',
       'continue',
-      '--depth',
+      '--rigor',
       'deep',
     ]);
     expect(result.exit).toBe(2);
-    expect(result.stderr).toMatch(/omit --depth/);
+    expect(result.stderr).toMatch(/omit --rigor\/--tournament\/--tournament-n\/--autonomous/);
   });
 
-  it('rejects supplying --depth more than once', async () => {
+  it('rejects supplying --rigor more than once', async () => {
     const conflict = await runMainExit([
       'resume',
       '--run-folder',
       join(runFolderBase, 'not-needed'),
       '--checkpoint-choice',
       'continue',
-      '--depth',
+      '--rigor',
       'standard',
-      '--depth',
+      '--rigor',
       'deep',
     ]);
     expect(conflict.exit).toBe(2);
-    expect(conflict.stderr).toMatch(/supply --depth only once/);
+    expect(conflict.stderr).toMatch(/supply --rigor only once/);
   });
 
-  it('rejects supplying both --mode and --entry-mode', async () => {
+  it('rejects --tournament-n without --tournament', async () => {
     const conflict = await runMainExit([
-      'resume',
+      'explore',
+      '--goal',
+      'decide: A vs B',
+      '--tournament-n',
+      '3',
       '--run-folder',
       join(runFolderBase, 'not-needed'),
-      '--checkpoint-choice',
-      'continue',
-      '--mode',
-      'lite',
-      '--entry-mode',
-      'deep',
     ]);
     expect(conflict.exit).toBe(2);
-    expect(conflict.stderr).toMatch(/use either --mode or --entry-mode, not both/);
+    expect(conflict.stderr).toMatch(/--tournament-n requires --tournament/);
   });
 
   it('rejects supplying --run-folder more than once', async () => {

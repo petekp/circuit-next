@@ -29,7 +29,7 @@ scenarios:
   - id: proof:explicit-build
     title: Explicit Build
     category: doing-work
-    command: ./bin/circuit-next run build --goal "add a focused change" --entry-mode deep --progress jsonl
+    command: ./bin/circuit-next run build --goal "add a focused change" --rigor deep --progress jsonl
     expected_flow: build
     expected_outcome: complete or checkpoint_waiting
     summary_contract: Summary explains explicit Build selection, checkpoint/verification state, and next action.
@@ -67,7 +67,7 @@ scenarios:
   - id: proof:checkpoint-resume
     title: Checkpoint And Resume
     category: continuity
-    command: ./bin/circuit-next run build --goal "deep change that asks for scope" --entry-mode deep --progress jsonl
+    command: ./bin/circuit-next run build --goal "deep change that asks for scope" --rigor deep --progress jsonl
     expected_flow: build
     expected_outcome: checkpoint_waiting then complete after resume
     summary_contract: Summary gives the checkpoint question, allowed choices, resume command, and final outcome.
