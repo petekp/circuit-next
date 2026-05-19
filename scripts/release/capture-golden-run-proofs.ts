@@ -311,8 +311,8 @@ const fixProofComposeExecutor: StepExecutor = async (step, context) => {
 // actually modifies files, so the live executors would observe an empty file
 // list and the change-set writer would refuse the run with "missing declared:
 // src/login.ts". This stub writes passing reports for both steps so the
-// proof closes with outcome 'partial' (still gated by the deferred
-// regression test) — exactly as it did before Slice 2 added these gates.
+// proof closes with outcome 'partial' (still routed by the deferred
+// regression test) — exactly as it did before Slice 2 added these checks.
 const fixProofVerificationExecutor: StepExecutor = async (step, context) => {
   if (step.kind !== 'verification') {
     throw new Error(

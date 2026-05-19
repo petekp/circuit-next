@@ -6,7 +6,7 @@
 //   - Drives HTML emission through HTML_PROJECTORS in shared/html/.
 //   - Overlays cross-flow concerns on top of the projection: worker
 //     disclosure, run note, evidence warnings, abort reason, checkpoint
-//     detail, and the report_paths artifact list.
+//     detail, and the report_paths list.
 //   - Builds the OperatorSummary schema, writes JSON + markdown + HTML.
 //
 // Per-flow projection logic lives in src/shared/operator-summary/. Schema-
@@ -97,9 +97,9 @@ export interface CheckpointWaitingOperatorSummaryResult {
 
 export type OperatorSummaryRunResult = RunResult | CheckpointWaitingOperatorSummaryResult;
 
-// Label used when listing the HTML artifact in report_paths. Not load-bearing
+// Label used when listing the HTML report in report_paths. Not load-bearing
 // for control flow — markdown rendering and CLI plumbing read summary.html_path
-// directly. Kept as a friendly label for the artifact list.
+// directly. Kept as a friendly label for the report list.
 const HTML_REPORT_LABEL = 'Operator summary (HTML)' as const;
 
 function jsonPath(runFolder: string): string {
@@ -272,7 +272,7 @@ export function writeOperatorSummary(input: {
     } catch (err) {
       // writeFileSync may have left a partial file behind. Remove it so
       // neither the envelope nor any reader points at a half-written
-      // artifact, and surface the failure as a warning the operator can
+      // report, and surface the failure as a warning the operator can
       // see in the markdown summary.
       if (existsSync(candidateHtmlPath))
         rmSync(candidateHtmlPath, { force: true, recursive: true });

@@ -1169,7 +1169,7 @@ describe('runtime control-loop parity twins', () => {
     expect(result.outcome).toBe('aborted');
     expect(result.verdict).toBeUndefined();
     expect(resultJson.verdict).toBeUndefined();
-    // The verdict gate fails ('reject' is not in pass=['accept']), but the
+    // The verdict check fails ('reject' is not in pass=['accept']), but the
     // body parses against runtime-proof-canonical@v1, so the schema-tied
     // report is still materialized for downstream readers.
     expect(inspection).toEqual({

@@ -122,7 +122,7 @@ describe('compileSchematicToCompiledFlow — failure modes', () => {
     expect(() => compileSchematicToCompiledFlow(fixSchematic)).not.toThrow();
   });
 
-  it('throws if a checkpoint step writes an report whose schema has no registered checkpoint writer', () => {
+  it('throws if a checkpoint step writes a report whose schema has no registered checkpoint writer', () => {
     const schematic = loadBuildSchematic();
     const itemsCopy = schematic.items.map((item) =>
       item.id === ('frame-step' as unknown as typeof item.id)

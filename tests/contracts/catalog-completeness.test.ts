@@ -384,7 +384,7 @@ describe('flow catalog completeness', () => {
     }
   });
 
-  it('every package that declares relayReports ships an reports.ts module', () => {
+  it('every package that declares relayReports ships a reports.ts module', () => {
     // A package that registers a relay report must own the
     // schema. The report-schema registry derives from
     // relayReports, so an empty / missing reports.ts here

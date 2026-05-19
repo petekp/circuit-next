@@ -25,7 +25,7 @@ This matrix compares the checked-in original Circuit snapshot with the current c
 | connector | Custom connectors | connector:custom | implemented | User config adapter command. |  |  |  |  | Wrapper receives a prompt and returns structured output. |  | Working custom connector example. |  |
 | checkpoint | Checkpoints | feature:checkpoints | implemented |  |  | current: Compiled checkpoints can pause, auto-resolve safe defaults, or resume from operator input.; expected: Scope, tradeoff, and publish choices pause by policy. |  |  |  |  | Checkpoint/resume golden run. |  |
 | continuity | Continuity | feature:continuity | implemented |  |  |  |  |  |  | current: Resume is explicit and auditable through continuity record and index files.; expected: Resume is explicit and auditable. | Handoff/resume golden run. |  |
-| plan_execution | Plan execution | feature:plan-execution | implemented | /circuit:run Execute this plan:<path> |  |  |  |  | current: Plan-execution requests route into the first executable flow slice instead of ending as analysis-only Explore.; expected: Selects the first executable workflow slice from plan content. |  | Plan-execution campaign-start proof. |  |
+| plan_execution | Plan execution | feature:plan-execution | implemented | /circuit:run Execute this plan:<path> |  |  |  |  | current: Plan-execution requests route into the first executable flow slice instead of ending as analysis-only Explore.; expected: Selects the first executable flow slice from plan content. |  | Plan-execution campaign-start proof. |  |
 
 ## Current Route And Mode Inventory
 

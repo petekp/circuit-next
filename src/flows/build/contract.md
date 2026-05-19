@@ -20,7 +20,7 @@ property_ids: []
 
 The **Build** flow is circuit-next's standard implementation flow:
 frame, plan, act, verify, review, close. It produces a typed,
-structured JSON report and an evidence chain at every step.
+structured JSON report and a chain of evidence at every step.
 
 ## Canonical stage policy
 

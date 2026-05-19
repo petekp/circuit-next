@@ -278,7 +278,7 @@ describe('Build runtime wiring', () => {
 
     expect(outcome.outcome).toBe('aborted');
     expect(outcome.reason).toMatch(/connector declared verdict 'reject'/);
-    // The verdict gate fails ('reject' is not in build-review.pass), but
+    // The verdict check fails ('reject' is not in build-review.pass), but
     // the body parses against build.review@v1, so the schema-tied report
     // is still materialized for the operator-summary projector.
     expect(existsSync(join(runFolder, 'reports/build/review.json'))).toBe(true);

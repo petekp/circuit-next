@@ -396,7 +396,7 @@ describe('runtime fanout executor', () => {
 
   it('aggregates verdict-fail branches with parsable bodies onto result.json (envelope), not the schema-tied report.json that Slice 1 now writes', async () => {
     // Slice 1's relay change (F-H-1 tertiary) writes the schema-tied report
-    // whenever the body parses, regardless of whether the verdict gate
+    // whenever the body parses, regardless of whether the verdict check
     // passed. The branch's report.json now exists on disk for verdict-fail-
     // with-parsable-body cases. The fanout aggregator branches on
     // evaluation.kind === 'pass' before consuming relayAttempt.report_path;
@@ -408,7 +408,7 @@ describe('runtime fanout executor', () => {
     // Use the test-only runtime-proof-strict@v1 schema where verdict is an
     // open string. The explore tournament-proposal schema fixes verdict to
     // the literal 'accept', which would short-circuit on schema parse fail
-    // before reaching the verdict gate and never exercise the post-Slice-1
+    // before reaching the verdict check and never exercise the post-Slice-1
     // path under test.
     const offAdmitBody = {
       verdict: 'reject',
